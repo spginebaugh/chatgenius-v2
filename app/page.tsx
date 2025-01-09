@@ -1,11 +1,10 @@
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { ensureDefaultChannels } from "./actions/channels";
 
 export default async function Home() {
-  // Force next.js to recognize this as a server component
   cookies();
-  
   const supabase = await createClient();
 
   const {
@@ -16,10 +15,24 @@ export default async function Home() {
     return redirect("/sign-in");
   }
 
+  // Ensure default channels exist
+  await ensureDefaultChannels();
+
+  // Fetch the general channel
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('id')
+    .eq('slug', 'general')
+    .single();
+
+  if (channel) {
+    redirect(`/channel/${channel.id}`);
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-4xl font-bold">Hello {user.email}!</h1>
-      <p className="text-muted-foreground">Welcome to your dashboard</p>
+      <h1 className="text-4xl font-bold">Welcome to Chat</h1>
+      <p className="text-muted-foreground">Error loading channels</p>
     </div>
   );
 }
