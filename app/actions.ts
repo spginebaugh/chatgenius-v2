@@ -4,6 +4,7 @@ import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -40,20 +41,40 @@ export const signUpAction = async (formData: FormData) => {
 };
 
 export const signInAction = async (formData: FormData) => {
+  console.log('[SignInAction] Starting sign-in process');
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
-  const supabase = await createClient();
+  console.log('[SignInAction] Email:', email);
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const supabase = await createClient();
+  console.log('[SignInAction] Supabase client created');
+
+  const { error, data } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
+    console.error('[SignInAction] Error during sign-in:', error.message);
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  return redirect("/");
+  console.log('[SignInAction] Sign-in successful, user:', data.user?.id);
+  console.log('[SignInAction] Session created:', !!data.session);
+
+  // Get the first channel or default to channel 1
+  const { data: channels, error: channelError } = await supabase.from('channels').select('id').limit(1);
+  
+  if (channelError) {
+    console.error('[SignInAction] Error fetching channels:', channelError.message);
+    return encodedRedirect("error", "/sign-in", "Error fetching channels");
+  }
+
+  console.log('[SignInAction] Channels fetched:', channels);
+  const channelId = channels?.[0]?.id || '1';
+
+  console.log('[SignInAction] Redirecting to channel:', channelId);
+  return redirect(`/channel/${channelId}`);
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -132,3 +153,10 @@ export const signOutAction = async () => {
   await supabase.auth.signOut();
   return redirect("/sign-in");
 };
+
+export async function logout() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath('/');
+  return { success: true };
+}

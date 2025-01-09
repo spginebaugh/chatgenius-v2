@@ -2,25 +2,33 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 export const updateSession = async (request: NextRequest) => {
-  // This `try/catch` block is only here for the interactive tutorial.
-  // Feel free to remove once you have Supabase connected.
+  console.log('[Middleware] Processing request for path:', request.nextUrl.pathname);
+  
   try {
-    // Create an unmodified response
     let response = NextResponse.next({
       request: {
         headers: request.headers,
       },
     });
+    console.log('[Middleware] Initial response created');
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
         cookies: {
           getAll() {
-            return request.cookies.getAll();
+            const cookies = request.cookies.getAll();
+            console.log('[Middleware] Getting all cookies:', cookies.map(c => c.name));
+            return cookies;
           },
           setAll(cookiesToSet) {
+            console.log('[Middleware] Setting cookies:', cookiesToSet.map(c => c.name));
             cookiesToSet.forEach(({ name, value }) =>
               request.cookies.set(name, value),
             );
@@ -34,21 +42,26 @@ export const updateSession = async (request: NextRequest) => {
         },
       },
     );
+    console.log('[Middleware] Supabase client created');
 
-    // This will refresh session if expired - required for Server Components
-    // https://supabase.com/docs/guides/auth/server-side/nextjs
-    const user = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('[Middleware] User check result:', {
+      hasUser: !!user,
+      userId: user?.id,
+      error: userError?.message
+    });
 
-    // protected routes
-    if (request.nextUrl.pathname.startsWith("/protected") && user.error) {
+    if ((request.nextUrl.pathname.startsWith("/protected") || 
+         request.nextUrl.pathname.startsWith("/channel")) && 
+        !user) {
+      console.log('[Middleware] Protected route accessed without auth, redirecting to sign-in');
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
+    console.log('[Middleware] Request processed successfully');
     return response;
   } catch (e) {
-    // If you are here, a Supabase client could not be created!
-    // This is likely because you have not set up environment variables.
-    // Check out http://localhost:3000 for Next Steps.
+    console.error('[Middleware] Error processing request:', e);
     return NextResponse.next({
       request: {
         headers: request.headers,

@@ -12,13 +12,52 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data: { user }, error: authError } = await supabase.auth.exchangeCodeForSession(code);
+    
+    console.log('Auth callback - User:', user?.id);
+    if (authError) console.error('Auth error:', authError);
+    
+    if (user) {
+      // Check if user exists
+      const { data: existingUser, error: userError } = await supabase
+        .from('users')
+        .select()
+        .eq('id', user.id)
+        .single();
+
+      console.log('User check - Exists:', !!existingUser);
+      if (userError) console.error('User check error:', userError);
+
+      // If user doesn't exist, create it
+      if (!existingUser) {
+        const newUser = {
+          id: user.id,
+          username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`
+        };
+        console.log('Creating user:', newUser);
+        
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert(newUser);
+        
+        if (insertError) {
+          console.error('User creation error:', insertError);
+        } else {
+          console.log('User created successfully');
+        }
+      }
+    }
   }
 
   if (redirectTo) {
     return NextResponse.redirect(`${origin}${redirectTo}`);
   }
 
-  // URL to redirect to after sign up process completes
-  return NextResponse.redirect(`${origin}/`);
+  // Get the first available channel or default to channel 1
+  const supabase = await createClient();
+  const { data: channels } = await supabase.from('channels').select('id').limit(1);
+  const channelId = channels?.[0]?.id || '1';
+
+  // Redirect to the first channel after authentication
+  return NextResponse.redirect(`${origin}/channel/${channelId}`);
 }
