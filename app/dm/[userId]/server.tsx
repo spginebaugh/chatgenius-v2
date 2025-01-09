@@ -31,8 +31,8 @@ export async function fetchDirectMessageData(params: { userId: string }) {
     .eq('id', params.userId)
     .single()
 
-  // Get direct messages between the two users
-  const { data: messages } = await supabase
+  // Get direct messages
+  let messagesQuery = supabase
     .from('direct_messages')
     .select(`
       id,
@@ -44,9 +44,20 @@ export async function fetchDirectMessageData(params: { userId: string }) {
         username
       )
     `)
-    .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-    .or(`sender_id.eq.${params.userId},receiver_id.eq.${params.userId}`)
     .order('inserted_at', { ascending: true })
+
+  // If it's a self-message (user messaging themselves)
+  if (user.id === params.userId) {
+    messagesQuery = messagesQuery
+      .eq('sender_id', user.id)
+      .eq('receiver_id', user.id)
+  } else {
+    // For messages between two different users
+    messagesQuery = messagesQuery
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${params.userId}),and(sender_id.eq.${params.userId},receiver_id.eq.${user.id})`)
+  }
+
+  const { data: messages } = await messagesQuery
 
   return { channels, otherUser, messages, users: users || [] }
 } 
