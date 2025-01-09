@@ -1,37 +1,34 @@
 "use client"
 
-import { sendMessage } from "@/app/actions/chat"
+import { sendDirectMessage } from "@/app/actions/chat"
 import { logout } from "@/app/actions"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Channel, Message, Profile } from "@/types/database"
-import { useEffect } from "react";
+import { Channel, DirectMessage, Profile, User } from "@/types/database"
+import { useEffect } from "react"
 
-interface ChannelClientProps {
+interface DirectMessageClientProps {
   channels: Channel[]
-  currentChannel: Channel
-  messages: (Message & { profiles: Profile })[]
+  otherUser: Profile
+  messages: (DirectMessage & { profiles: Profile })[]
   users: Profile[]
+  currentUser: User
 }
 
-export function ChannelClient({ channels, currentChannel, messages, users }: ChannelClientProps) {
+export function DirectMessageClient({ 
+  channels, 
+  otherUser, 
+  messages, 
+  users,
+  currentUser 
+}: DirectMessageClientProps) {
   const router = useRouter()
 
   useEffect(() => {
-    console.log("ChannelClient mounted");
-    console.log("Channels:", channels);
-    console.log("Current Channel:", currentChannel);
-    console.log("Messages:", messages);
-    console.log("Users:", users);
-    
-    // Check if currentChannel is valid
-    if (!currentChannel) {
-      console.error("No current channel found, redirecting to sign-in");
-      router.push("/sign-in");
-    } else {
-      console.log("Current channel is valid");
+    if (!otherUser) {
+      router.push("/")
     }
-  }, [channels, currentChannel, messages, users]);
+  }, [otherUser, router])
 
   const handleLogout = async () => {
     try {
@@ -49,22 +46,18 @@ export function ChannelClient({ channels, currentChannel, messages, users }: Cha
       {/* Sidebar */}
       <div className="w-64 bg-[#BF5700] text-white flex flex-col">
         <div className="flex items-center justify-between p-4">
-          <h1 className="text-xl font-bold">Channels</h1>
+          <h1 className="text-xl font-bold">Chat</h1>
         </div>
 
         {/* Channels */}
         <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2 px-3">3 members</h2>
+          <h2 className="text-lg font-semibold mb-2 px-3">Channels</h2>
           <ul className="space-y-1">
             {channels?.map((channel) => (
               <li key={channel.id}>
                 <Link 
                   href={`/channel/${channel.id}`}
-                  className={`flex items-center px-3 py-1 ${
-                    channel.id === currentChannel.id 
-                      ? 'bg-[#a64a00] text-white' 
-                      : 'text-white hover:bg-[#a64a00]'
-                  }`}
+                  className="flex items-center px-3 py-1 text-white hover:bg-[#a64a00]"
                 >
                   <span className="mr-2">#</span>
                   {channel.slug}
@@ -80,7 +73,12 @@ export function ChannelClient({ channels, currentChannel, messages, users }: Cha
           <ul className="space-y-1">
             {users?.map((user) => (
               <li key={user.id}>
-                <Link href={`/dm/${user.id}`} className="text-white hover:bg-[#a64a00] flex items-center px-3 py-1">
+                <Link 
+                  href={`/dm/${user.id}`} 
+                  className={`text-white hover:bg-[#a64a00] flex items-center px-3 py-1 ${
+                    user.id === otherUser.id ? 'bg-[#a64a00]' : ''
+                  }`}
+                >
                   <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
                   {user.username}
                 </Link>
@@ -92,12 +90,15 @@ export function ChannelClient({ channels, currentChannel, messages, users }: Cha
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white">
-        {/* Channel Header */}
+        {/* DM Header */}
         <div className="h-14 bg-[#333F48] flex items-center px-4">
-          <h2 className="font-semibold text-white">
-            #{currentChannel.slug}
-          </h2>
-          <button onClick={handleLogout} className="ml-auto text-white hover:text-gray-300">Logout</button>
+          <div className="flex items-center text-white">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            <h2 className="font-semibold">{otherUser.username}</h2>
+          </div>
+          <button onClick={handleLogout} className="ml-auto text-white hover:text-gray-300">
+            Logout
+          </button>
         </div>
 
         {/* Messages Area */}
@@ -128,28 +129,17 @@ export function ChannelClient({ channels, currentChannel, messages, users }: Cha
 
         {/* Message Input */}
         <div className="px-4 py-3 bg-white border-t border-gray-200">
-          <form action={sendMessage}>
-            <input type="hidden" name="channelId" value={currentChannel.id} />
+          <form action={sendDirectMessage}>
+            <input type="hidden" name="receiverId" value={otherUser.id} />
             <input
               type="text"
               name="message"
-              placeholder={`Message #${currentChannel.slug}`}
+              placeholder={`Message ${otherUser.username}`}
               className="w-full p-2 rounded bg-white border border-gray-300 text-gray-700 placeholder-gray-500 focus:outline-none focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700]"
             />
           </form>
         </div>
       </div>
-
-      <style jsx>{`
-        .logout-button {
-          background-color: #f00;
-          color: white;
-          border: none;
-          padding: 5px 10px;
-          cursor: pointer;
-          margin-left: auto;
-        }
-      `}</style>
     </div>
   )
 } 

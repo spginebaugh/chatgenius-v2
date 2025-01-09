@@ -32,4 +32,35 @@ export async function sendMessage(formData: FormData) {
   }
 
   revalidatePath(`/channel/${channelId}`);
+}
+
+export async function sendDirectMessage(formData: FormData) {
+  const supabase = await createClient();
+  const messageContent = formData.get("message")?.toString();
+  const receiverId = formData.get("receiverId")?.toString();
+
+  if (!messageContent || !receiverId) {
+    throw new Error("Message and receiver ID are required");
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("User not authenticated");
+  }
+
+  const { error } = await supabase.from("direct_messages").insert({
+    message: messageContent,
+    sender_id: user.id,
+    receiver_id: receiverId,
+    inserted_at: new Date().toISOString()
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/dm/${receiverId}`);
 } 

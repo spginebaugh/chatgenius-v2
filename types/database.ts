@@ -1,23 +1,37 @@
 export interface Channel {
-  id: string
+  id: number
   slug: string
-  created_at: string
-  updated_at: string
+  created_by: string
+  inserted_at: string
 }
 
 export interface Message {
-  id: string
+  id: number
   message: string
-  channel_id: string
   user_id: string
+  channel_id: number
   inserted_at: string
-  updated_at: string
+  profiles?: Profile
 }
 
 export interface Profile {
   id: string
   username: string
-  avatar_url?: string
+  avatar_url: string
   created_at: string
-  updated_at: string
+}
+
+export interface DirectMessage {
+  id: number
+  message: string
+  sender_id: string
+  receiver_id: string
+  inserted_at: string
+  profiles?: Profile
+}
+
+export interface User {
+  id: string
+  email?: string
+  created_at: string
 } 
