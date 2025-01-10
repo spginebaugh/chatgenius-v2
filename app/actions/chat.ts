@@ -3,64 +3,42 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export async function sendMessage(formData: FormData) {
+interface SendMessageParams {
+  channelId: string
+  message: string
+}
+
+interface SendDirectMessageParams {
+  receiverId: string
+  message: string
+}
+
+export async function sendMessage({ channelId, message }: SendMessageParams) {
   const supabase = await createClient();
-  const messageContent = formData.get("message")?.toString();
-  const channelId = formData.get("channelId")?.toString();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
 
-  if (!messageContent || !channelId) {
-    throw new Error("Message and channel ID are required");
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
-
-  const { error } = await supabase.from("messages").insert({
-    message: messageContent,
+  await supabase.from("messages").insert({
     channel_id: channelId,
-    user_id: user.id,
-    inserted_at: new Date().toISOString()
+    message,
+    user_id: user.id
   });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 
   revalidatePath(`/channel/${channelId}`);
 }
 
-export async function sendDirectMessage(formData: FormData) {
+export async function sendDirectMessage({ receiverId, message }: SendDirectMessageParams) {
   const supabase = await createClient();
-  const messageContent = formData.get("message")?.toString();
-  const receiverId = formData.get("receiverId")?.toString();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
 
-  if (!messageContent || !receiverId) {
-    throw new Error("Message and receiver ID are required");
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
-
-  const { error } = await supabase.from("direct_messages").insert({
-    message: messageContent,
+  await supabase.from("direct_messages").insert({
     sender_id: user.id,
     receiver_id: receiverId,
-    inserted_at: new Date().toISOString()
+    message
   });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 
   revalidatePath(`/dm/${receiverId}`);
 } 
