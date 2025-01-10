@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
 import { ChatClient } from "@/components/chat"
-import { Channel, DirectMessage, Message, User } from "@/types/database"
+import { Channel, DirectMessage, Message, ThreadMessage, User } from "@/types/database"
 
 interface ChatServerProps {
   viewType: "channel" | "dm"
@@ -18,6 +18,7 @@ interface DisplayMessage {
   message: string
   inserted_at: string
   profiles: SimpleUser
+  thread_messages?: DisplayMessage[]
 }
 
 export async function ChatServer({ viewType, id }: ChatServerProps) {
@@ -117,6 +118,46 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
 
   const userMap = new Map((messageUsers || []).map(u => [u.id, u]))
 
+  // Fetch thread messages for all messages
+  const messageIds = messages?.map(m => m.id) || []
+  const { data: threadMessages, error: threadError } = await supabase
+    .from("thread_messages")
+    .select(`
+      id,
+      message,
+      user_id,
+      parent_id,
+      parent_type,
+      inserted_at,
+      users (
+        id,
+        username
+      )
+    `)
+    .in("parent_id", messageIds)
+    .eq("parent_type", viewType === "channel" ? "channel" : "direct")
+    .order("inserted_at", { ascending: true })
+
+  if (threadError) {
+    console.error('[ChatServer] Error fetching thread messages:', threadError)
+  }
+
+  // Group thread messages by parent
+  const threadMessagesByParent = new Map<string, DisplayMessage[]>()
+  threadMessages?.forEach(tm => {
+    const key = tm.parent_id.toString()
+    if (!threadMessagesByParent.has(key)) {
+      threadMessagesByParent.set(key, [])
+    }
+    const userProfile = userMap.get(tm.user_id)
+    threadMessagesByParent.get(key)?.push({
+      id: tm.id.toString(),
+      message: tm.message,
+      inserted_at: tm.inserted_at,
+      profiles: userProfile || { id: tm.user_id, username: "Unknown User" }
+    })
+  })
+
   const formattedMessages: DisplayMessage[] = (messages || []).map(msg => {
     if (viewType === "channel") {
       const m = msg as Message
@@ -124,7 +165,8 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
         id: m.id.toString(),
         message: m.message,
         inserted_at: m.inserted_at,
-        profiles: userMap.get(m.user_id) || { id: m.user_id, username: "Unknown User" }
+        profiles: userMap.get(m.user_id) || { id: m.user_id, username: "Unknown User" },
+        thread_messages: threadMessagesByParent.get(m.id.toString())
       }
     } else {
       const m = msg as DirectMessage
@@ -132,7 +174,8 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
         id: m.id.toString(),
         message: m.message,
         inserted_at: m.inserted_at,
-        profiles: userMap.get(m.sender_id) || { id: m.sender_id, username: "Unknown User" }
+        profiles: userMap.get(m.sender_id) || { id: m.sender_id, username: "Unknown User" },
+        thread_messages: threadMessagesByParent.get(m.id.toString())
       }
     }
   })

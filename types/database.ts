@@ -33,4 +33,14 @@ export interface DirectMessage {
 export interface User {
   id: string
   username: string
+}
+
+export interface ThreadMessage {
+  id: number
+  message: string
+  user_id: string
+  parent_id: number
+  parent_type: 'message' | 'direct_message'
+  inserted_at: string
+  profiles?: Profile
 } 
