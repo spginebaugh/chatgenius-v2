@@ -22,15 +22,57 @@ interface DisplayMessage {
 }
 
 export async function ChatServer({ viewType, id }: ChatServerProps) {
-  console.log('[ChatServer] Starting with viewType:', viewType, 'id:', id)
   const supabase = await createClient()
   
-  // Check auth
-  const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
-  console.log('[ChatServer] Auth check:', { user: !!authUser, error: userError?.message })
-
-  if (!authUser || userError) {
+  // First get auth user
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser) {
+    console.log('[ChatServer] No auth user, redirecting to sign-in')
     redirect("/sign-in")
+  }
+
+  // Then run remaining independent queries in parallel
+  const [
+    channelsResponse,
+    usersResponse,
+    currentViewResponse,
+    messagesResponse
+  ] = await Promise.all([
+    supabase.from("channels").select("id, slug, created_by, inserted_at"),
+    supabase.from("users").select("id, username"),
+    supabase.from(viewType === "channel" ? "channels" : "users")
+      .select("*")
+      .eq("id", id)
+      .single(),
+    viewType === "channel"
+      ? supabase
+          .from("messages")
+          .select("id, message, user_id, channel_id, inserted_at")
+          .eq("channel_id", id)
+          .order("inserted_at", { ascending: true })
+      : supabase
+          .from("direct_messages")
+          .select("id, message, sender_id, receiver_id, inserted_at")
+          .or(
+            `and(sender_id.eq.${authUser.id},receiver_id.eq.${id}),` +
+            `and(sender_id.eq.${id},receiver_id.eq.${authUser.id})`
+          )
+          .order("inserted_at", { ascending: true })
+  ])
+
+  const { data: channels } = channelsResponse
+  const { data: allUsers } = usersResponse
+  const { data: currentViewData, error: viewError } = currentViewResponse
+  const { data: messages, error: messagesError } = messagesResponse
+
+  console.log('[ChatServer] Current view data fetch:', { 
+    hasData: !!currentViewData, 
+    error: viewError?.message 
+  })
+
+  if (!currentViewData) {
+    console.log('[ChatServer] No current view data, redirecting to home')
+    redirect("/")
   }
 
   // Get user data
@@ -44,16 +86,6 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
     redirect("/sign-in")
   }
 
-  // Fetch channels
-  const { data: channels, error: channelsError } = await supabase
-    .from("channels")
-    .select("id, slug, created_by, inserted_at")
-    .order("inserted_at", { ascending: true })
-  console.log('[ChatServer] Channels fetch:', { 
-    count: channels?.length, 
-    error: channelsError?.message 
-  })
-
   // Fetch users
   const { data: users, error: usersError } = await supabase
     .from("users")
@@ -62,48 +94,6 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
   console.log('[ChatServer] Users fetch:', { 
     count: users?.length, 
     error: usersError?.message 
-  })
-
-  // Fetch current view data (channel or user)
-  const { data: currentViewData, error: viewError } = viewType === "channel"
-    ? await supabase
-        .from("channels")
-        .select("id, slug, created_by, inserted_at")
-        .eq("id", id)
-        .single()
-    : await supabase
-        .from("users")
-        .select("id, username")
-        .eq("id", id)
-        .single()
-  console.log('[ChatServer] Current view data fetch:', { 
-    hasData: !!currentViewData, 
-    error: viewError?.message 
-  })
-
-  if (!currentViewData) {
-    console.log('[ChatServer] No current view data, redirecting to home')
-    redirect("/")
-  }
-
-  // Fetch messages
-  const { data: messages, error: messagesError } = viewType === "channel"
-    ? await supabase
-        .from("messages")
-        .select("id, message, user_id, channel_id, inserted_at")
-        .eq("channel_id", id)
-        .order("inserted_at", { ascending: true })
-    : await supabase
-        .from("direct_messages")
-        .select("id, message, sender_id, receiver_id, inserted_at")
-        .or(
-          `and(sender_id.eq.${authUser.id},receiver_id.eq.${id}),` +
-          `and(sender_id.eq.${id},receiver_id.eq.${authUser.id})`
-        )
-        .order("inserted_at", { ascending: true })
-  console.log('[ChatServer] Messages fetch:', { 
-    count: messages?.length, 
-    error: messagesError?.message 
   })
 
   // Get user info for messages

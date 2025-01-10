@@ -105,6 +105,19 @@ export function useRealtimeMessages({
 
     const setupSubscriptions = async () => {
       console.log('[setupSubscriptions] Setting up subscriptions');
+      
+      // Run parallel queries for message IDs
+      const [channelMessagesResponse, directMessagesResponse] = await Promise.all([
+        channelId ? supabase
+          .from('messages')
+          .select('id')
+          .eq('channel_id', channelId) : null,
+        userId ? supabase
+          .from('direct_messages')
+          .select('id')
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId})`) : null
+      ].filter(Boolean))
+
       // Channel messages subscription
       if (channelId) {
         console.log(`[setupSubscriptions] Subscribing to channel messages for channel ID: ${channelId}`);
@@ -134,11 +147,7 @@ export function useRealtimeMessages({
           .subscribe()
 
         // Subscribe to thread messages for this channel's messages
-        const { data: channelMessages } = await supabase
-          .from('messages')
-          .select('id')
-          .eq('channel_id', channelId)
-
+        const channelMessages = channelMessagesResponse?.data
         if (channelMessages?.length) {
           const messageIds = channelMessages.map(m => m.id)
           console.log(`[setupSubscriptions] Subscribing to thread messages for channel messages with IDs: ${messageIds}`);
@@ -200,11 +209,7 @@ export function useRealtimeMessages({
           .subscribe()
 
         // Subscribe to thread messages for this user's direct messages
-        const { data: directMessages } = await supabase
-          .from('direct_messages')
-          .select('id')
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-
+        const directMessages = directMessagesResponse?.data
         if (directMessages?.length) {
           const messageIds = directMessages.map(m => m.id)
           console.log(`[setupSubscriptions] Subscribing to thread messages for direct messages with IDs: ${messageIds}`);
@@ -232,8 +237,6 @@ export function useRealtimeMessages({
               }
             )
             .subscribe()
-        } else {
-          console.log('[setupSubscriptions] No direct messages found for subscription');
         }
       }
     }
