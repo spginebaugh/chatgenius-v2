@@ -15,8 +15,14 @@ interface SendDirectMessageParams {
 
 interface SendThreadMessageParams {
   parentId: number
-  parentType: 'channel' | 'direct'
+  parentType: 'channel_message' | 'direct_message'
   message: string
+}
+
+interface AddEmojiReactionParams {
+  parentId: string | number
+  parentType: 'channel_message' | 'direct_message' | 'thread_message'
+  emoji: string
 }
 
 export async function sendMessage({ channelId, message }: SendMessageParams) {
@@ -25,7 +31,7 @@ export async function sendMessage({ channelId, message }: SendMessageParams) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  await supabase.from("messages").insert({
+  await supabase.from("channel_messages").insert({
     channel_id: channelId,
     message,
     user_id: user.id
@@ -91,11 +97,11 @@ export async function sendThreadMessage({ parentId, parentType, message }: SendT
   console.log('[sendThreadMessage] Successfully inserted thread message:', threadMessage);
 
   // Get the path to revalidate based on parent type
-  if (parentType === 'channel') {
+  if (parentType === 'channel_message') {
     const { data: parentMessage, error: parentError } = await supabase
-      .from('messages')
+      .from('channel_messages')
       .select('channel_id')
-      .eq('id', parentId)
+      .eq('message_id', parentId)
       .single();
     
     if (parentError) {
@@ -110,7 +116,7 @@ export async function sendThreadMessage({ parentId, parentType, message }: SendT
     const { data: parentDM, error: parentError } = await supabase
       .from('direct_messages')
       .select('receiver_id')
-      .eq('id', parentId)
+      .eq('message_id', parentId)
       .single();
     
     if (parentError) {
@@ -125,8 +131,70 @@ export async function sendThreadMessage({ parentId, parentType, message }: SendT
 
   return { 
     data: {
-      ...threadMessage,
+      message_id: threadMessage.message_id,
+      message: threadMessage.message,
+      inserted_at: threadMessage.inserted_at,
       profiles: userProfile
     }
   };
+}
+
+export async function addEmojiReaction({ parentId, parentType, emoji }: AddEmojiReactionParams) {
+  const supabase = await createClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const numericParentId = typeof parentId === 'string' ? parseInt(parentId) : parentId;
+
+  // Check if reaction already exists
+  const { data: existingReaction } = await supabase
+    .from("emoji_reactions")
+    .select()
+    .eq('user_id', user.id)
+    .eq('parent_id', numericParentId)
+    .eq('parent_type', parentType)
+    .eq('emoji', emoji)
+    .single();
+
+  if (existingReaction) {
+    // Remove the reaction if it already exists
+    await supabase
+      .from("emoji_reactions")
+      .delete()
+      .eq('reaction_id', existingReaction.reaction_id);
+  } else {
+    // Add new reaction
+    await supabase.from("emoji_reactions").insert({
+      user_id: user.id,
+      parent_id: numericParentId,
+      parent_type: parentType,
+      emoji
+    });
+  }
+
+  // Revalidate the appropriate path
+  if (parentType === 'channel_message') {
+    const { data: message } = await supabase
+      .from('channel_messages')
+      .select('channel_id')
+      .eq('message_id', numericParentId)
+      .single();
+    
+    if (message) {
+      revalidatePath(`/channel/${message.channel_id}`);
+    }
+  } else if (parentType === 'direct_message') {
+    const { data: dm } = await supabase
+      .from('direct_messages')
+      .select('receiver_id')
+      .eq('message_id', numericParentId)
+      .single();
+    
+    if (dm) {
+      revalidatePath(`/dm/${dm.receiver_id}`);
+    }
+  }
+
+  return { success: true };
 } 

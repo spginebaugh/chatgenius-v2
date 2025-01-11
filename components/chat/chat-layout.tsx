@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Channel, User } from "@/types/database"
+import { ReactionType } from "@/types/frontend"
 import { Sidebar } from "."
 import { MessageList } from "."
 import { MessageInput } from "."
@@ -28,12 +29,14 @@ interface ChatLayoutProps {
         username: string
       }
     }>
+    reactions?: ReactionType[]
   }>
   currentView: {
     type: "channel" | "dm"
     data: Channel | User
   }
   onSendMessage: (message: string) => Promise<void>
+  onEmojiSelect: (messageId: string, emoji: string, parent_type: 'channel_message' | 'direct_message' | 'thread_message') => void
 }
 
 export function ChatLayout({
@@ -41,47 +44,24 @@ export function ChatLayout({
   users,
   messages,
   currentView,
-  onSendMessage
+  onSendMessage,
+  onEmojiSelect
 }: ChatLayoutProps) {
-  const [activeThread, setActiveThread] = useState<{
-    parentMessage: typeof messages[0]
-    responses: NonNullable<typeof messages[0]["thread_messages"]>
-  } | null>(null)
+  const [selectedThread, setSelectedThread] = useState<ChatLayoutProps["messages"][0] | null>(null)
 
-  const handleThreadMessage = async (message: string) => {
-    try {
-      const result = await sendThreadMessage({
-        parentId: parseInt(activeThread!.parentMessage.id),
-        parentType: currentView.type === "channel" ? "channel" : "direct",
-        message
-      });
-
-      if (result.error) {
-        console.error("Failed to send thread message:", result.error);
-        // You might want to show an error toast/notification here
-        return;
+  const handleSendThreadMessage = async (message: string) => {
+    if (selectedThread) {
+      try {
+        await sendThreadMessage({
+          parentId: parseInt(selectedThread.id),
+          parentType: currentView.type === "channel" ? "channel_message" : "direct_message",
+          message
+        })
+      } catch (error) {
+        console.error("Failed to send thread message:", error)
       }
-
-      // Update the local state with the new message while we wait for revalidation
-      if (activeThread && result.data) {
-        setActiveThread({
-          ...activeThread,
-          responses: [
-            ...activeThread.responses,
-            {
-              id: result.data.id.toString(),
-              message: result.data.message,
-              inserted_at: result.data.inserted_at,
-              profiles: result.data.profiles
-            }
-          ]
-        });
-      }
-    } catch (error) {
-      console.error("Error sending thread message:", error);
-      // You might want to show an error toast/notification here
     }
-  };
+  }
 
   return (
     <div className="flex h-screen">
@@ -106,16 +86,13 @@ export function ChatLayout({
         </div>
 
         <div className="flex-1 flex min-h-0">
-          <div className={`flex-1 flex flex-col ${activeThread ? 'border-r border-gray-200' : ''}`}>
+          <div className={`flex-1 flex flex-col ${selectedThread ? 'border-r border-gray-200' : ''}`}>
             <div className="flex-1 min-h-0">
               <MessageList 
                 messages={messages} 
-                onThreadClick={(message) => {
-                  setActiveThread({
-                    parentMessage: message,
-                    responses: message.thread_messages || []
-                  })
-                }}
+                onThreadClick={setSelectedThread}
+                onEmojiSelect={onEmojiSelect}
+                viewType={currentView.type}
               />
             </div>
             
@@ -129,12 +106,12 @@ export function ChatLayout({
             />
           </div>
 
-          {activeThread && (
+          {selectedThread && (
             <ThreadPanel
-              parentMessage={activeThread.parentMessage}
-              responses={activeThread.responses}
-              onClose={() => setActiveThread(null)}
-              onSendMessage={handleThreadMessage}
+              parentMessage={selectedThread}
+              onClose={() => setSelectedThread(null)}
+              onSendMessage={handleSendThreadMessage}
+              onEmojiSelect={onEmojiSelect}
             />
           )}
         </div>

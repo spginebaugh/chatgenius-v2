@@ -55,8 +55,8 @@ export async function GET(request: Request) {
 
   // Get the first available channel or default to channel 1
   const supabase = await createClient();
-  const { data: channels } = await supabase.from('channels').select('id').limit(1);
-  const channelId = channels?.[0]?.id || '1';
+  const { data: channels } = await supabase.from('channels').select('channel_id').limit(1);
+  const channelId = channels?.[0]?.channel_id || '1';
 
   // Redirect to the first channel after authentication
   return NextResponse.redirect(`${origin}/channel/${channelId}`);

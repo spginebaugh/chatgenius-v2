@@ -11,27 +11,40 @@ export default async function ForgotPassword(props: {
 }) {
   const searchParams = await props.searchParams;
   return (
-    <>
-      <form className="flex-1 flex flex-col w-full gap-2 text-foreground [&>input]:mb-6 min-w-64 max-w-64 mx-auto">
-        <div>
-          <h1 className="text-2xl font-medium">Reset Password</h1>
-          <p className="text-sm text-secondary-foreground">
-            Already have an account?{" "}
-            <Link className="text-primary underline" href="/sign-in">
-              Sign in
-            </Link>
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
-          <Label htmlFor="email">Email</Label>
-          <Input name="email" placeholder="you@example.com" required />
-          <SubmitButton formAction={forgotPasswordAction}>
+    <div className="flex flex-col items-center justify-center w-full">
+      <form className="w-full max-w-sm">
+        <h1 className="text-3xl font-bold text-center text-[#BF5700] mb-8">Reset Password</h1>
+        
+        <div className="space-y-4">
+          <div>
+            <div className="mb-1 text-black">Email</div>
+            <Input 
+              name="email" 
+              placeholder="Your email address" 
+              required 
+              className="bg-black/5 text-left text-black focus:bg-black/5 placeholder:text-gray-500 [&:-webkit-autofill]:bg-black/5 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_rgba(0,0,0,0.05)] [&:-webkit-autofill]:[text-fill-color:rgb(0,0,0)]"
+            />
+          </div>
+
+          <SubmitButton 
+            formAction={forgotPasswordAction}
+            className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white mt-4"
+          >
             Reset Password
           </SubmitButton>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Remember your password?{" "}
+              <Link href="/sign-in" className="text-[#BF5700] hover:text-[#A64A00]">
+                Sign In
+              </Link>
+            </p>
+          </div>
+
           <FormMessage message={searchParams} />
         </div>
       </form>
-      <SmtpMessage />
-    </>
+    </div>
   );
 }

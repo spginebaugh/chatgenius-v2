@@ -21,12 +21,12 @@ export default async function Home() {
   // Fetch the general channel
   const { data: channel } = await supabase
     .from('channels')
-    .select('id')
+    .select('channel_id')
     .eq('slug', 'general')
     .single();
 
   if (channel) {
-    redirect(`/channel/${channel.id}`);
+    redirect(`/channel/${channel.channel_id}`);
   }
 
   return (

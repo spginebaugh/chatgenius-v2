@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { Channel, User } from "@/types/database"
+import clsx from "clsx"
 
 interface SidebarProps {
   channels: Channel[]
@@ -24,14 +25,15 @@ export function Sidebar({ channels, users, currentView }: SidebarProps) {
         <h2 className="text-lg font-semibold mb-2 px-3">Channels</h2>
         <ul className="space-y-1">
           {channels?.map((channel) => (
-            <li key={channel.id}>
+            <li key={channel.channel_id}>
               <Link 
-                href={`/channel/${channel.id}`}
-                className={`flex items-center px-3 py-1 ${
-                  currentView.type === "channel" && channel.id === (currentView.data as Channel).id
-                    ? 'bg-[#a64a00] text-white'
-                    : 'text-white hover:bg-[#a64a00]'
-                }`}
+                href={`/channel/${channel.channel_id}`}
+                className={clsx(
+                  "block px-4 py-2 hover:bg-[#a64a00]",
+                  currentView.type === "channel" && channel.channel_id === (currentView.data as Channel).channel_id
+                    ? "bg-[#8B3E00]"
+                    : ""
+                )}
               >
                 <span className="mr-2">#</span>
                 {channel.slug}
@@ -51,7 +53,7 @@ export function Sidebar({ channels, users, currentView }: SidebarProps) {
                 href={`/dm/${user.id}`}
                 className={`text-white hover:bg-[#a64a00] flex items-center px-3 py-1 ${
                   currentView.type === "dm" && user.id === (currentView.data as User).id
-                    ? 'bg-[#a64a00]'
+                    ? 'bg-[#8B3E00]'
                     : ''
                 }`}
               >

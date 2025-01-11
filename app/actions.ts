@@ -63,7 +63,7 @@ export const signInAction = async (formData: FormData) => {
   console.log('[SignInAction] Session created:', !!data.session);
 
   // Get the first channel or default to channel 1
-  const { data: channels, error: channelError } = await supabase.from('channels').select('id').limit(1);
+  const { data: channels, error: channelError } = await supabase.from('channels').select('channel_id').limit(1);
   
   if (channelError) {
     console.error('[SignInAction] Error fetching channels:', channelError.message);
@@ -71,7 +71,7 @@ export const signInAction = async (formData: FormData) => {
   }
 
   console.log('[SignInAction] Channels fetched:', channels);
-  const channelId = channels?.[0]?.id || '1';
+  const channelId = channels?.[0]?.channel_id || '1';
 
   console.log('[SignInAction] Redirecting to channel:', channelId);
   return redirect(`/channel/${channelId}`);
@@ -157,6 +157,28 @@ export const signOutAction = async () => {
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateUsername(newUsername: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ username: newUsername })
+    .eq("id", user.id);
+
+  if (error) {
+    console.error("Failed to update username:", error);
+    return { error: error.message };
+  }
+
   revalidatePath('/');
   return { success: true };
 }
