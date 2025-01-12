@@ -1,14 +1,14 @@
 import { Suspense } from 'react'
 import LoginForm from './login-form'
 
-interface PageProps {
-  searchParams: { message?: string }
-}
-
-export default function Page({ searchParams }: PageProps) {
+export default function Page({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   return (
     <Suspense>
-      <LoginForm message={searchParams?.message} />
+      <LoginForm message={searchParams.message as string | undefined} />
     </Suspense>
   )
 }
