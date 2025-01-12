@@ -2,7 +2,7 @@ import { getChannels, getUsers, getCurrentUser } from '@/lib/queries'
 import { ChatClient } from '@/components/chat/chat-client'
 import { redirect } from 'next/navigation'
 
-export default async function ChatPage() {
+export default async function Page() {
   const [channels, users, currentUser] = await Promise.all([
     getChannels(),
     getUsers(),

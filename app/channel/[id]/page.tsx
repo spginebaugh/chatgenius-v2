@@ -1,12 +1,10 @@
 import { ChatServer } from "@/app/_components/chat-server"
 
-interface ChannelPageProps {
+interface PageProps {
   params: Promise<{ id: string }>
 }
 
-export async function ChannelPage({ params }: ChannelPageProps) {
+export default async function Page({ params }: PageProps) {
   const resolvedParams = await params
   return <ChatServer viewType="channel" id={resolvedParams.id} />
-}
-
-export default ChannelPage; 
+} 
