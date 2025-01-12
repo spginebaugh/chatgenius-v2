@@ -3,6 +3,7 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { SmileIcon } from "lucide-react"
+import ReactMarkdown from 'react-markdown'
 
 interface MessageListProps {
   messages: Array<{
@@ -13,6 +14,11 @@ interface MessageListProps {
       id: string
       username: string
     }
+    files?: Array<{
+      url: string
+      type: string
+      name: string
+    }>
     thread_messages?: Array<{
       id: string
       message: string
@@ -64,7 +70,32 @@ export function MessageList({ messages, onThreadClick, onEmojiSelect, viewType }
                 })}
               </span>
             </div>
-            <p className="text-gray-700 text-sm">{message.message}</p>
+            <div className="text-gray-700 text-sm prose prose-sm max-w-none">
+              <ReactMarkdown>{message.message}</ReactMarkdown>
+            </div>
+
+            {/* Attached Images */}
+            {message.files && message.files.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {message.files.map((file, index) => (
+                  file.type.startsWith('image/') && (
+                    <a 
+                      key={index} 
+                      href={file.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <img 
+                        src={file.url} 
+                        alt={file.name}
+                        className="max-h-60 rounded-lg object-cover shadow-sm hover:shadow-md transition-shadow"
+                      />
+                    </a>
+                  )
+                ))}
+              </div>
+            )}
             
             {/* Emoji Reactions */}
             {message.reactions && message.reactions.length > 0 && (

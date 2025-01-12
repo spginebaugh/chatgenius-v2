@@ -7,7 +7,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export default function ProfileSettings() {
+export function ProfileSettings() {
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,4 +61,6 @@ export default function ProfileSettings() {
       </form>
     </div>
   );
-} 
+}
+
+export default ProfileSettings; 

@@ -1,42 +1,71 @@
 "use server"
 
-import { createClient } from "@/utils/supabase/server";
+import { requireAuth } from '@/lib/utils/auth'
+import { insertRecord, updateRecord, deleteRecord } from '@/lib/utils/supabase-helpers'
+import type { Channel } from '@/types/database'
 
-const DEFAULT_CHANNELS = ['general', 'random', 'announcements'];
+interface CreateChannelProps {
+  name: string
+  description?: string
+}
 
-export async function ensureDefaultChannels() {
-  const supabase = await createClient();
+interface UpdateChannelProps {
+  channelId: string
+  name?: string
+  description?: string
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+interface DeleteChannelProps {
+  channelId: string
+}
 
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
+export async function createChannel({ name, description }: CreateChannelProps) {
+  const user = await requireAuth({ throwOnMissingProfile: true })
 
-  // Check existing channels
-  const { data: existingChannels } = await supabase
-    .from('channels')
-    .select('slug')
-    .in('slug', DEFAULT_CHANNELS);
+  const slug = name.toLowerCase().replace(/\s+/g, '-')
 
-  const existingSlugs = existingChannels?.map(c => c.slug) || [];
-  const missingChannels = DEFAULT_CHANNELS.filter(name => !existingSlugs.includes(name));
-
-  // Create any missing channels
-  if (missingChannels.length > 0) {
-    const channelsToCreate = missingChannels.map(slug => ({
+  await insertRecord<Channel>({
+    table: 'channels',
+    data: {
       slug,
-      created_by: user.id,
-    }));
-
-    const { error } = await supabase
-      .from('channels')
-      .insert(channelsToCreate);
-
-    if (error) {
-      console.error('Error creating default channels:', error);
+      created_by: user.id
+    },
+    options: {
+      revalidatePath: '/channels/[id]'
     }
+  })
+}
+
+export async function updateChannel({ channelId, name, description }: UpdateChannelProps) {
+  await requireAuth({ throwOnMissingProfile: true })
+
+  const updates: Partial<Channel> = {}
+  if (name) {
+    updates.slug = name.toLowerCase().replace(/\s+/g, '-')
   }
+
+  await updateRecord<Channel>({
+    table: 'channels',
+    data: updates,
+    match: {
+      channel_id: parseInt(channelId)
+    },
+    options: {
+      revalidatePath: '/channels/[id]'
+    }
+  })
+}
+
+export async function deleteChannel({ channelId }: DeleteChannelProps) {
+  await requireAuth({ throwOnMissingProfile: true })
+
+  await deleteRecord<Channel>({
+    table: 'channels',
+    match: {
+      channel_id: parseInt(channelId)
+    },
+    options: {
+      revalidatePath: '/channels/[id]'
+    }
+  })
 } 

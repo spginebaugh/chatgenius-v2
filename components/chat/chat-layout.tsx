@@ -7,7 +7,8 @@ import { Sidebar } from "."
 import { MessageList } from "."
 import { MessageInput } from "."
 import { ThreadPanel } from "./thread-panel"
-import { sendThreadMessage } from "@/app/actions/chat"
+import { handleThreadMessage } from "@/app/actions/messages"
+import { useUsers } from "@/lib/hooks/use-users"
 
 interface ChatLayoutProps {
   channels: Channel[]
@@ -48,26 +49,25 @@ export function ChatLayout({
   onEmojiSelect
 }: ChatLayoutProps) {
   const [selectedThread, setSelectedThread] = useState<ChatLayoutProps["messages"][0] | null>(null)
+  const { users: realtimeUsers } = useUsers()
 
   const handleSendThreadMessage = async (message: string) => {
-    if (selectedThread) {
-      try {
-        await sendThreadMessage({
-          parentId: parseInt(selectedThread.id),
-          parentType: currentView.type === "channel" ? "channel_message" : "direct_message",
-          message
-        })
-      } catch (error) {
-        console.error("Failed to send thread message:", error)
-      }
-    }
+    if (!selectedThread) return
+    await handleThreadMessage({
+      parentId: selectedThread.id,
+      parentType: currentView.type === "channel" ? "channel_message" : "direct_message",
+      message
+    })
   }
+
+  // Get the current DM user's realtime status
+  const dmUser = currentView.type === "dm" ? realtimeUsers[(currentView.data as User).id] : null
 
   return (
     <div className="flex h-screen">
       <Sidebar
         channels={channels}
-        users={users}
+        users={Object.values(realtimeUsers)}
         currentView={currentView}
       />
 
@@ -76,8 +76,8 @@ export function ChatLayout({
           <div className="flex items-center text-white">
             {currentView.type === "dm" ? (
               <>
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                <h2 className="font-semibold">{(currentView.data as User).username}</h2>
+                <span className={`w-2 h-2 rounded-full mr-2 ${dmUser?.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                <h2 className="font-semibold">{dmUser?.username || (currentView.data as User).username}</h2>
               </>
             ) : (
               <h2 className="font-semibold">#{(currentView.data as Channel).slug}</h2>
@@ -112,6 +112,7 @@ export function ChatLayout({
               onClose={() => setSelectedThread(null)}
               onSendMessage={handleSendThreadMessage}
               onEmojiSelect={onEmojiSelect}
+              viewType={currentView.type}
             />
           )}
         </div>

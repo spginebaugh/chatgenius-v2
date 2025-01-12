@@ -3,17 +3,17 @@
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { updateUsername } from "@/app/actions/profile"
+import { toast } from "sonner"
 
 interface ProfileSettingsPanelProps {
   currentUsername: string
   onClose: () => void
-  onUpdateUsername: (newUsername: string) => Promise<void>
 }
 
 export function ProfileSettingsPanel({ 
   currentUsername,
   onClose,
-  onUpdateUsername
 }: ProfileSettingsPanelProps) {
   const [username, setUsername] = useState(currentUsername)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -24,7 +24,11 @@ export function ProfileSettingsPanel({
 
     setIsSubmitting(true)
     try {
-      await onUpdateUsername(username)
+      await updateUsername({ username })
+      toast.success("Username updated successfully")
+      onClose()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update username")
     } finally {
       setIsSubmitting(false)
     }
@@ -55,6 +59,8 @@ export function ProfileSettingsPanel({
               placeholder="Enter your username"
               className="w-full"
               required
+              minLength={3}
+              maxLength={30}
             />
           </div>
 

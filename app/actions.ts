@@ -5,6 +5,8 @@ import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { updateRecord } from '@/lib/utils/supabase-helpers';
+import type { User } from '@/types/database';
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -62,18 +64,36 @@ export const signInAction = async (formData: FormData) => {
   console.log('[SignInAction] Sign-in successful, user:', data.user?.id);
   console.log('[SignInAction] Session created:', !!data.session);
 
+  // Update user status to ONLINE
+  await updateRecord<User>({
+    table: 'users',
+    data: { 
+      status: 'ONLINE',
+      last_active_at: new Date().toISOString()
+    },
+    match: { id: data.user.id },
+    options: {
+      errorMap: {
+        'not_found': {
+          message: 'User profile not found',
+          status: 404
+        }
+      }
+    }
+  });
+
   // Get the first channel or default to channel 1
-  const { data: channels, error: channelError } = await supabase.from('channels').select('channel_id').limit(1);
+  const { data: channels, error: channelError } = await supabase
+    .from('channels')
+    .select('channel_id')
+    .limit(1);
   
   if (channelError) {
     console.error('[SignInAction] Error fetching channels:', channelError.message);
     return encodedRedirect("error", "/sign-in", "Error fetching channels");
   }
 
-  console.log('[SignInAction] Channels fetched:', channels);
   const channelId = channels?.[0]?.channel_id || '1';
-
-  console.log('[SignInAction] Redirecting to channel:', channelId);
   return redirect(`/channel/${channelId}`);
 };
 
@@ -118,7 +138,7 @@ export const resetPasswordAction = async (formData: FormData) => {
   const confirmPassword = formData.get("confirmPassword") as string;
 
   if (!password || !confirmPassword) {
-    encodedRedirect(
+    return encodedRedirect(
       "error",
       "/protected/reset-password",
       "Password and confirm password are required",
@@ -126,7 +146,7 @@ export const resetPasswordAction = async (formData: FormData) => {
   }
 
   if (password !== confirmPassword) {
-    encodedRedirect(
+    return encodedRedirect(
       "error",
       "/protected/reset-password",
       "Passwords do not match",
@@ -138,27 +158,71 @@ export const resetPasswordAction = async (formData: FormData) => {
   });
 
   if (error) {
-    encodedRedirect(
+    return encodedRedirect(
       "error",
       "/protected/reset-password",
       "Password update failed",
     );
   }
 
-  encodedRedirect("success", "/protected/reset-password", "Password updated");
+  return encodedRedirect("success", "/protected/reset-password", "Password updated");
 };
 
 export const signOutAction = async () => {
   const supabase = await createClient();
-  await supabase.auth.signOut();
-  return redirect("/sign-in");
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Update user status to OFFLINE
+      await updateRecord<User>({
+        table: 'users',
+        data: { 
+          status: 'OFFLINE',
+          last_active_at: new Date().toISOString()
+        },
+        match: { id: user.id }
+      });
+
+      // Wait a moment for the status update to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    await supabase.auth.signOut();
+    return redirect("/sign-in");
+  } catch (error) {
+    console.error('[SignOutAction] Error during sign out:', error);
+    return redirect("/sign-in");
+  }
 };
 
 export async function logout() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
-  revalidatePath('/');
-  return { success: true };
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Update user status to OFFLINE
+      await updateRecord<User>({
+        table: 'users',
+        data: { 
+          status: 'OFFLINE',
+          last_active_at: new Date().toISOString()
+        },
+        match: { id: user.id }
+      });
+
+      // Wait a moment for the status update to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    await supabase.auth.signOut();
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('[Logout] Error during logout:', error);
+    return { success: false, error: 'Failed to logout' };
+  }
 }
 
 export async function updateUsername(newUsername: string) {
@@ -169,16 +233,14 @@ export async function updateUsername(newUsername: string) {
     return { error: "Not authenticated" };
   }
 
-  const { error } = await supabase
-    .from("users")
-    .update({ username: newUsername })
-    .eq("id", user.id);
+  await updateRecord<User>({
+    table: 'users',
+    data: { username: newUsername },
+    match: { id: user.id },
+    options: {
+      revalidatePath: '/'
+    }
+  });
 
-  if (error) {
-    console.error("Failed to update username:", error);
-    return { error: error.message };
-  }
-
-  revalidatePath('/');
   return { success: true };
 }

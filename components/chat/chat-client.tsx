@@ -1,13 +1,17 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Channel, User } from "@/types/database"
-import { ReactionType } from "@/types/frontend"
 import { ChatLayout } from "./chat-layout"
-import { sendMessage, sendDirectMessage, addEmojiReaction } from "@/app/actions/chat"
-import { logout, updateUsername } from "@/app/actions"
-import { useRealtimeMessages } from "@/hooks/use-realtime-messages"
+import { useMessagesStore } from "@/lib/stores/messages"
+import { useUsersStore } from "@/lib/stores/users"
+import { useChannelsStore } from "@/lib/stores/channels"
+import { useMessages } from "@/lib/hooks/use-messages"
+import { useRealtimeMessages } from "@/lib/hooks/use-realtime-messages"
+import { useUsers } from "@/lib/hooks/use-users"
+import { useChannels } from "@/lib/hooks/use-channels"
+import { addEmojiReaction } from "@/app/actions/messages"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +19,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ProfileSettingsPanel } from "./profile-settings-panel"
-import Link from "next/link"
+import { ReactionType } from '@/types/frontend'
+import { createClient } from "@/utils/supabase/client"
 
 interface ChatClientProps {
+  initialView: {
+    type: 'channel' | 'dm'
+    data: Channel | User
+  }
+  currentUser: User
   channels: Channel[]
   users: User[]
-  messages: Array<{
+  initialMessages: Array<{
     id: string
     message: string
     inserted_at: string
@@ -39,156 +49,138 @@ interface ChatClientProps {
     }>
     reactions?: ReactionType[]
   }>
-  currentView: {
-    type: "channel" | "dm"
-    data: Channel | User
-  }
-  currentUser?: User
 }
 
-interface ReactionSummary {
-  emoji: string
-  count: number
-  reacted_by_me: boolean
-}
-
-export function ChatClient({
-  channels,
-  users,
-  messages: initialMessages,
-  currentView,
-  currentUser
-}: ChatClientProps) {
+export function ChatClient({ initialView, currentUser, channels, users, initialMessages }: ChatClientProps) {
   const router = useRouter()
-  const [messages, setMessages] = useState(initialMessages)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const { updateReactions, setMessages, addMessage, deleteMessage } = useMessagesStore()
+  const { updateUserStatus, setUsers: setStoreUsers, setCurrentUser } = useUsersStore()
+  const { setActiveChannel } = useChannelsStore()
+  const { users: realtimeUsers } = useUsers()
 
+  // Initialize stores with initial data
   useEffect(() => {
-    setMessages(initialMessages)
-  }, [initialMessages])
-
-  useEffect(() => {
-    if (!currentView.data) {
-      router.push("/")
-    }
-  }, [currentView.data, router])
-
-  const handleNewMessage = (message: typeof messages[0]) => {
-    setMessages((prev) => [...prev, message])
-  }
-
-  const handleNewThreadMessage = (parentId: string, threadMessage: typeof messages[0]) => {
-    setMessages((prev) =>
-      prev.map((msg) => {
-        if (msg.id === parentId) {
-          return {
-            ...msg,
-            thread_messages: [...(msg.thread_messages || []), threadMessage],
-          }
-        }
-        return msg
-      })
+    setStoreUsers(users)
+    setCurrentUser(currentUser)
+    setMessages(initialView.type === 'channel' 
+      ? String((initialView.data as Channel).channel_id)
+      : String((initialView.data as User).id), 
+      initialMessages
     )
-  }
 
-  const handleMessageDelete = (messageId: string) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== messageId))
-  }
-
-  const handleReactionChange = (messageId: string, reactions: ReactionType[] | undefined, parentType: 'channel_message' | 'direct_message' | 'thread_message') => {
-    setMessages(prevMessages => {
-      return prevMessages.map(message => {
-        if (parentType === 'thread_message') {
-          if (message.thread_messages) {
-            return {
-              ...message,
-              thread_messages: message.thread_messages.map(tm => 
-                tm.id === messageId ? { ...tm, reactions } : tm
-              )
-            }
-          }
-        } else if (message.id === messageId) {
-          return { ...message, reactions }
-        }
-        return message
-      })
+    users.forEach(user => {
+      if (user.status === 'ONLINE') {
+        updateUserStatus(user.id, 'ONLINE')
+      }
     })
-  }
+  }, [setStoreUsers, setCurrentUser, setMessages, updateUserStatus, users, currentUser, initialMessages, initialView])
 
-  useRealtimeMessages({
-    channelId: currentView.type === "channel" ? (currentView.data as Channel).channel_id.toString() : undefined,
-    userId: currentView.type === "dm" ? currentUser?.id : undefined,
-    viewType: currentView.type,
-    currentViewData: currentView.type === "dm" ? currentView.data as User : undefined,
-    onNewMessage: handleNewMessage,
-    onNewThreadMessage: handleNewThreadMessage,
-    onMessageDelete: handleMessageDelete,
-    onReactionChange: handleReactionChange,
+  // Update local state when realtime users change
+  useEffect(() => {
+    const updatedCurrentUser = realtimeUsers[currentUser.id]
+    if (updatedCurrentUser) {
+      setCurrentUser(updatedCurrentUser)
+    }
+  }, [realtimeUsers, currentUser.id, setCurrentUser])
+
+  // Get key and ID based on view type
+  const key = initialView.type === 'channel' 
+    ? String((initialView.data as Channel).channel_id)
+    : String((initialView.data as User).id)
+
+  // Get messages and actions
+  const { messages, sendMessage } = useMessages({
+    channelId: initialView.type === 'channel' ? key : undefined,
+    userId: currentUser.id,
+    viewType: initialView.type,
+    currentViewData: {
+      id: key,
+      type: initialView.type
+    }
   })
 
-  const handleSendMessage = async (message: string) => {
-    if (currentView.type === "channel") {
-      await sendMessage({
-        channelId: (currentView.data as Channel).channel_id.toString(),
-        message
-      })
-    } else {
-      await sendDirectMessage({
-        receiverId: (currentView.data as User).id,
-        message
-      })
+  // Setup real-time message updates
+  useRealtimeMessages({
+    channelId: initialView.type === 'channel' ? key : undefined,
+    userId: initialView.type === 'dm' ? key : undefined,
+    viewType: initialView.type,
+    currentViewData: initialView.data as User,
+    onNewMessage: (message) => {
+      addMessage(key, message)
+    },
+    onNewThreadMessage: (parentId, message) => {
+      // Handle thread message updates if needed
+    },
+    onMessageDelete: (messageId) => {
+      deleteMessage(key, messageId)
+    },
+    onReactionChange: (messageId, reactions, parentType) => {
+      updateReactions(key, messageId, reactions || [], parentType)
     }
-  }
+  })
 
   const handleLogout = async () => {
     try {
-      const result = await logout()
-      if (result.success) {
-        router.push("/sign-in")
-      }
+      const supabase = createClient()
+      
+      // First set user status to offline
+      await supabase
+        .from('users')
+        .update({ 
+          status: 'OFFLINE',
+          last_active_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id)
+
+      // Then sign out
+      await supabase.auth.signOut()
+      
+      // Finally redirect
+      router.push("/sign-in")
     } catch (error) {
       console.error("Logout failed:", error)
     }
   }
 
-  const handleUpdateUsername = async (newUsername: string) => {
+  const handleEmojiSelect = useCallback(async (messageId: string, emoji: string, parent_type?: 'channel_message' | 'direct_message' | 'thread_message') => {
     try {
-      const result = await updateUsername(newUsername)
-      if (result.error) {
-        console.error("Failed to update username:", result.error)
-        return
-      }
-      setIsProfileOpen(false)
-    } catch (error) {
-      console.error("Failed to update username:", error)
-    }
-  }
+      const existingMessage = messages.find(msg => msg.id === messageId)
+      if (!existingMessage) return
 
-  const handleEmojiSelect = async (
-    messageId: string, 
-    emoji: string, 
-    parent_type: 'channel_message' | 'direct_message' | 'thread_message'
-  ) => {
-    try {
+      // Use provided parent_type or determine based on view type
+      const messageParentType = parent_type || (initialView.type === 'channel' ? 'channel_message' : 'direct_message')
+
+      // Call the server action to toggle the reaction
       await addEmojiReaction({
         parentId: messageId,
-        parentType: parent_type,
+        parentType: messageParentType,
         emoji
       })
+
+      // Update local state through the store
+      const existingReactions = existingMessage.reactions || []
+      const reactionExists = existingReactions.some(r => r.emoji === emoji)
+
+      const newReactions: ReactionType[] = reactionExists
+        ? existingReactions.filter(r => r.emoji !== emoji)
+        : [...existingReactions, { emoji, count: 1, reacted_by_me: true }]
+
+      updateReactions(key, messageId, newReactions, messageParentType)
     } catch (error) {
-      console.error("Failed to add emoji reaction:", error)
+      console.error('Failed to toggle reaction:', error)
     }
-  }
+  }, [key, messages, updateReactions, initialView.type])
 
   return (
     <div className="relative">
       <ChatLayout
-        channels={channels}
-        users={users}
+        currentView={initialView}
         messages={messages}
-        currentView={currentView}
-        onSendMessage={handleSendMessage}
+        onSendMessage={sendMessage}
         onEmojiSelect={handleEmojiSelect}
+        channels={channels}
+        users={Object.values(realtimeUsers)}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -211,10 +203,10 @@ export function ChatClient({
                 <circle cx="12" cy="7" r="4" />
               </svg>
               <div className="flex flex-col items-start">
-                <span className="text-sm font-medium leading-none">{currentUser?.username || 'User'}</span>
+                <span className="text-sm font-medium leading-none">{realtimeUsers[currentUser.id]?.username || currentUser?.username || 'User'}</span>
                 <span className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${currentUser?.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'}`} />
-                  {currentUser?.status?.toLowerCase() || 'offline'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${realtimeUsers[currentUser.id]?.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'}`} />
+                  {realtimeUsers[currentUser.id]?.status?.toLowerCase() || currentUser?.status?.toLowerCase() || 'offline'}
                 </span>
               </div>
             </div>
@@ -240,9 +232,8 @@ export function ChatClient({
         <div className="absolute right-0 top-0 h-full">
           <div className="flex h-[calc(100vh-3.5rem)] mt-14">
             <ProfileSettingsPanel
-              currentUsername={currentUser?.username || ''}
+              currentUsername={realtimeUsers[currentUser.id]?.username || currentUser?.username || ''}
               onClose={() => setIsProfileOpen(false)}
-              onUpdateUsername={handleUpdateUsername}
             />
           </div>
         </div>

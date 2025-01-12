@@ -6,6 +6,7 @@ import { MessageInput } from "./message-input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { SmileIcon } from "lucide-react"
+import ReactMarkdown from 'react-markdown'
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🤔", "👀"]
 
@@ -18,6 +19,11 @@ interface ThreadPanelProps {
       id: string
       username: string
     }
+    files?: Array<{
+      url: string
+      type: string
+      name: string
+    }>
     thread_messages?: Array<{
       id: string
       message: string
@@ -26,6 +32,11 @@ interface ThreadPanelProps {
         id: string
         username: string
       }
+      files?: Array<{
+        url: string
+        type: string
+        name: string
+      }>
       reactions?: ReactionType[]
     }>
     reactions?: ReactionType[]
@@ -33,13 +44,15 @@ interface ThreadPanelProps {
   onSendMessage: (message: string) => Promise<void>
   onClose: () => void
   onEmojiSelect: (messageId: string, emoji: string, parent_type: 'channel_message' | 'direct_message' | 'thread_message') => void
+  viewType: 'channel' | 'dm'
 }
 
 export function ThreadPanel({ 
   parentMessage, 
   onSendMessage,
   onClose, 
-  onEmojiSelect 
+  onEmojiSelect,
+  viewType 
 }: ThreadPanelProps) {
   const MessageReactions = ({ message, isThreadMessage = false }: { message: typeof parentMessage, isThreadMessage?: boolean }) => (
     <>
@@ -52,7 +65,7 @@ export function ThreadPanel({
               onClick={() => onEmojiSelect?.(
                 message.id, 
                 reaction.emoji, 
-                isThreadMessage ? 'thread_message' : 'channel_message'
+                isThreadMessage ? 'thread_message' : (viewType === 'channel' ? 'channel_message' : 'direct_message')
               )}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                 reaction.reacted_by_me 
@@ -91,7 +104,7 @@ export function ThreadPanel({
                 onClick={() => onEmojiSelect?.(
                   messageId, 
                   emoji, 
-                  isThreadMessage ? 'thread_message' : 'channel_message'
+                  isThreadMessage ? 'thread_message' : (viewType === 'channel' ? 'channel_message' : 'direct_message')
                 )}
               >
                 {emoji}
@@ -101,6 +114,32 @@ export function ThreadPanel({
         </PopoverContent>
       </Popover>
     </div>
+  )
+
+  const MessageFiles = ({ files }: { files?: Array<{ url: string, type: string, name: string }> }) => (
+    <>
+      {files && files.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {files.map((file, index) => (
+            file.type.startsWith('image/') && (
+              <a 
+                key={index} 
+                href={file.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <img 
+                  src={file.url} 
+                  alt={file.name}
+                  className="max-h-60 rounded-lg object-cover shadow-sm hover:shadow-md transition-shadow"
+                />
+              </a>
+            )
+          ))}
+        </div>
+      )}
+    </>
   )
 
   return (
@@ -137,7 +176,10 @@ export function ThreadPanel({
                 </span>
                 <EmojiButton messageId={parentMessage.id} isThreadMessage={false} />
               </div>
-              <p className="text-gray-700 text-sm">{parentMessage.message}</p>
+              <div className="text-gray-700 text-sm prose prose-sm max-w-none">
+                <ReactMarkdown>{parentMessage.message}</ReactMarkdown>
+              </div>
+              <MessageFiles files={parentMessage.files} />
               <MessageReactions message={parentMessage} isThreadMessage={false} />
             </div>
           </div>
@@ -164,7 +206,10 @@ export function ThreadPanel({
                   </span>
                   <EmojiButton messageId={threadMessage.id} isThreadMessage={true} />
                 </div>
-                <p className="text-gray-700 text-sm">{threadMessage.message}</p>
+                <div className="text-gray-700 text-sm prose prose-sm max-w-none">
+                  <ReactMarkdown>{threadMessage.message}</ReactMarkdown>
+                </div>
+                <MessageFiles files={threadMessage.files} />
                 <MessageReactions message={threadMessage} isThreadMessage={true} />
               </div>
             </div>

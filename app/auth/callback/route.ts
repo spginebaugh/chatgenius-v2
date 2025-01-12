@@ -1,5 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
+import { insertRecord, selectRecords } from '@/lib/utils/supabase-helpers';
 import { NextResponse } from "next/server";
+import type { User } from '@/types/database';
 
 export async function GET(request: Request) {
   // The `/auth/callback` route is required for the server-side auth flow implemented
@@ -18,32 +20,29 @@ export async function GET(request: Request) {
     if (authError) console.error('Auth error:', authError);
     
     if (user) {
-      // Check if user exists
-      const { data: existingUser, error: userError } = await supabase
-        .from('users')
-        .select()
-        .eq('id', user.id)
-        .single();
-
-      console.log('User check - Exists:', !!existingUser);
-      if (userError) console.error('User check error:', userError);
-
-      // If user doesn't exist, create it
-      if (!existingUser) {
-        const newUser = {
-          id: user.id,
-          username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`
-        };
-        console.log('Creating user:', newUser);
-        
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert(newUser);
-        
-        if (insertError) {
-          console.error('User creation error:', insertError);
-        } else {
+      try {
+        // Try to get existing user
+        await selectRecords<User>({
+          table: 'users',
+          match: { id: user.id }
+        });
+      } catch (error) {
+        // If user doesn't exist (404 error), create them
+        if (error instanceof Error && error.message.includes('Not found')) {
+          const newUser = {
+            id: user.id,
+            username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`
+          };
+          console.log('Creating user:', newUser);
+          
+          await insertRecord<User>({
+            table: 'users',
+            data: newUser
+          });
+          
           console.log('User created successfully');
+        } else {
+          console.error('Error checking user:', error);
         }
       }
     }

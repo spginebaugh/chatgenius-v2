@@ -56,7 +56,7 @@ create table public.thread_messages (
   parent_id bigint not null,
   parent_type message_parent_type not null,
   inserted_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  constraint valid_thread_parent_types check (parent_type in ('channel_message', 'direct_message'))
+  constraint valid_thread_parent_types check (parent_type in ('channel_message', 'direct_message', 'thread_message'))
 );
 comment on table public.thread_messages is 'Thread replies for both channel messages and direct messages.';
 
@@ -385,3 +385,30 @@ alter table public.thread_messages replica identity full;
 alter table public.emoji_reactions replica identity full;
 alter table public.files replica identity full;
 alter table public.message_mentions replica identity full;
+
+-- Function to toggle emoji reactions
+create or replace function public.toggle_reaction(
+  p_message_id bigint,
+  p_message_type message_parent_type,
+  p_emoji text,
+  p_user_id uuid
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Try to delete existing reaction first
+  delete from public.emoji_reactions
+  where parent_id = p_message_id
+    and parent_type = p_message_type
+    and emoji = p_emoji
+    and user_id = p_user_id;
+    
+  -- If no rows were deleted, insert new reaction
+  if not found then
+    insert into public.emoji_reactions (parent_id, parent_type, emoji, user_id)
+    values (p_message_id, p_message_type, p_emoji, p_user_id);
+  end if;
+end;
+$$;

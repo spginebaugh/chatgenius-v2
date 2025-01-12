@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
-export default function Login(props: { searchParams: Promise<Message> }) {
+export function Login(props: { searchParams: Promise<Message> }) {
   const [searchParams, setSearchParams] = useState<Message>({ message: "" });
 
   useEffect(() => {
@@ -76,3 +76,5 @@ export default function Login(props: { searchParams: Promise<Message> }) {
     </div>
   );
 }
+
+export default Login;

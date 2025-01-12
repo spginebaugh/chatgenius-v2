@@ -4,7 +4,9 @@ interface ChannelPageProps {
   params: Promise<{ id: string }>
 }
 
-export default async function ChannelPage({ params }: ChannelPageProps) {
+export async function ChannelPage({ params }: ChannelPageProps) {
   const resolvedParams = await params
   return <ChatServer viewType="channel" id={resolvedParams.id} />
-} 
+}
+
+export default ChannelPage; 

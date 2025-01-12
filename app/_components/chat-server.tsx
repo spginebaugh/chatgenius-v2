@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
 import { ChatClient } from "@/components/chat"
-import { Channel, DirectMessage, User, ChannelMessage } from "@/types/database"
+import { Channel, DirectMessage, User, ChannelMessage, ThreadMessage, EmojiReaction } from "@/types/database"
+import { requireAuth } from '@/lib/utils/auth'
+import { selectRecords } from '@/lib/utils/supabase-helpers'
+import { formatMessageForDisplay, formatReactions } from '@/lib/utils/message-helpers'
 
 interface ChatServerProps {
   viewType: "channel" | "dm"
@@ -24,28 +27,47 @@ interface DisplayMessage {
     count: number
     reacted_by_me: boolean
   }>
+  message_id?: string
+}
+
+interface ReactionResponse {
+  reaction_id: string
+  emoji: string
+  user_id: string
+  parent_id: string
+  parent_type: 'channel_message' | 'direct_message' | 'thread_message'
+  inserted_at: string
+}
+
+interface ChannelReactionResponse extends ReactionResponse {
+  channel_messages: { message_id: number }[]
+}
+
+interface DirectReactionResponse extends ReactionResponse {
+  direct_messages: { message_id: number }[]
+}
+
+interface ThreadReactionResponse extends ReactionResponse {
+  thread_messages: { message_id: number }[]
 }
 
 export async function ChatServer({ viewType, id }: ChatServerProps) {
   const supabase = await createClient()
+  const user = await requireAuth({ throwOnMissingProfile: true })
   
-  // First get auth user
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) {
-    console.log('[ChatServer] No auth user, redirecting to sign-in')
-    redirect("/sign-in")
-  }
-
-  // Then run remaining independent queries in parallel
-  const [
-    channelsResponse,
-    usersResponse,
-    currentViewResponse,
-    messagesResponse
-  ] = await Promise.all([
-    supabase.from("channels").select("channel_id, slug, created_by, inserted_at"),
-    supabase.from("users").select("id, username, bio, profile_picture_url, last_active_at, status, inserted_at"),
-    supabase.from(viewType === "channel" ? "channels" : "users")
+  // Run remaining independent queries in parallel
+  const [channels, allUsers, currentViewData, messages] = await Promise.all([
+    selectRecords<Channel>({
+      table: "channels",
+      select: "channel_id, slug, created_by, inserted_at"
+    }),
+    selectRecords<User>({
+      table: "users",
+      select: "id, username, bio, profile_picture_url, last_active_at, status, inserted_at"
+    }),
+    // For single records, use Supabase directly
+    supabase
+      .from(viewType === "channel" ? "channels" : "users")
       .select("*")
       .eq(viewType === "channel" ? "channel_id" : "id", id)
       .single(),
@@ -59,52 +81,33 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
           .from("direct_messages")
           .select("message_id, message, sender_id, receiver_id, inserted_at")
           .or(
-            `and(sender_id.eq.${authUser.id},receiver_id.eq.${id}),` +
-            `and(sender_id.eq.${id},receiver_id.eq.${authUser.id})`
+            `and(sender_id.eq.${user.id},receiver_id.eq.${id}),` +
+            `and(sender_id.eq.${id},receiver_id.eq.${user.id})`
           )
           .order("inserted_at", { ascending: true })
   ])
 
-  const { data: channels } = channelsResponse
-  const { data: allUsers } = usersResponse
-  const { data: currentViewData, error: viewError } = currentViewResponse
-  const { data: messages, error: messagesError } = messagesResponse
-
-  console.log('[ChatServer] Current view data fetch:', { 
-    hasData: !!currentViewData, 
-    error: viewError?.message 
-  })
-
-  if (!currentViewData) {
+  const currentView = currentViewData.data
+  if (!currentView) {
     console.log('[ChatServer] No current view data, redirecting to home')
     redirect("/")
   }
 
-  // Get user data
-  const { data: currentUser } = await supabase
+  // Get current user data
+  const { data: currentUserData } = await supabase
     .from("users")
     .select("id, username, bio, profile_picture_url, last_active_at, status, inserted_at")
-    .eq("id", authUser.id)
+    .eq("id", user.id)
     .single()
 
-  if (!currentUser) {
+  if (!currentUserData) {
     redirect("/sign-in")
   }
 
-  // Fetch users
-  const { data: users, error: usersError } = await supabase
-    .from("users")
-    .select("id, username, bio, profile_picture_url, last_active_at, status, inserted_at")
-    .order("username", { ascending: true })
-  console.log('[ChatServer] Users fetch:', { 
-    count: users?.length, 
-    error: usersError?.message 
-  })
-
-  // Get user info for messages
+  // Get users for messages
   const userIds = viewType === "channel"
-    ? Array.from(new Set((messages as ChannelMessage[])?.map(m => m.user_id) || []))
-    : Array.from(new Set((messages as DirectMessage[])?.flatMap(m => [m.sender_id, m.receiver_id]) || []))
+    ? Array.from(new Set((messages.data as ChannelMessage[])?.map(m => m.user_id) || []))
+    : Array.from(new Set((messages.data as DirectMessage[])?.flatMap(m => [m.sender_id, m.receiver_id]) || []))
 
   const { data: messageUsers } = await supabase
     .from("users")
@@ -113,9 +116,9 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
 
   const userMap = new Map((messageUsers || []).map(u => [u.id, u]))
 
-  // Fetch thread messages for all messages
-  const messageIds = messages?.map(m => m.message_id) || []
-  const { data: threadMessages, error: threadError } = await supabase
+  // Fetch thread messages
+  const messageIds = messages.data?.map(m => m.message_id) || []
+  const { data: threadMessages } = await supabase
     .from("thread_messages")
     .select(`
       message_id,
@@ -133,85 +136,84 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
     .eq("parent_type", viewType === "channel" ? "channel_message" : "direct_message")
     .order("inserted_at", { ascending: true })
 
-  if (threadError) {
-    console.error('[ChatServer] Error fetching thread messages:', threadError)
-  }
-
-  // Split the query into two separate queries for clarity
-  const mainMessageQuery = `parent_id.in.(${messageIds.join(',')},parent_type.eq.${viewType === "channel" ? "'channel_message'" : "'direct_message'"})`;
-  const threadMessageQuery = `parent_id.in.(${threadMessages?.map(tm => tm.message_id).join(',') || '-1'},parent_type.eq.'thread_message'`;
-
-  // Fetch reactions for main messages
-  const mainReactionsPromise = supabase
-    .from("emoji_reactions")
-    .select(`
-      reaction_id,
-      emoji,
-      user_id,
-      parent_id,
-      parent_type
-    `)
-    .in('parent_id', messageIds)
-    .eq('parent_type', viewType === "channel" ? "channel_message" : "direct_message");
-
-  // Fetch reactions for thread messages
-  const threadReactionsPromise = threadMessages?.length 
-    ? supabase
-        .from("emoji_reactions")
-        .select(`
-          reaction_id,
-          emoji,
-          user_id,
-          parent_id,
-          parent_type
-        `)
-        .in('parent_id', threadMessages.map(tm => tm.message_id))
-        .eq('parent_type', 'thread_message')
-    : Promise.resolve({ data: [], error: null });
-
-  // Combine results
+  // Fetch reactions for main messages and thread messages
   const [mainReactions, threadReactions] = await Promise.all([
-    mainReactionsPromise,
-    threadReactionsPromise
-  ]);
+    supabase
+      .from("emoji_reactions")
+      .select(`
+        reaction_id,
+        emoji,
+        user_id,
+        parent_id,
+        parent_type,
+        inserted_at,
+        ${viewType === "channel" ? "channel_messages!inner" : "direct_messages!inner"}(message_id)
+      `)
+      .in("parent_id", messageIds)
+      .eq("parent_type", viewType === "channel" ? "channel_message" : "direct_message")
+      .filter('parent_type', 'eq', viewType === "channel" ? "channel_message" : "direct_message"),
+    threadMessages?.length 
+      ? supabase
+          .from("emoji_reactions")
+          .select(`
+            reaction_id,
+            emoji,
+            user_id,
+            parent_id,
+            parent_type,
+            inserted_at,
+            thread_messages!inner(message_id)
+          `)
+          .in("parent_id", threadMessages.map(tm => tm.message_id))
+          .eq("parent_type", "thread_message")
+          .filter('parent_type', 'eq', 'thread_message')
+      : Promise.resolve({ data: [], error: null })
+  ])
 
-  const reactions = [
-    ...(mainReactions.data || []),
-    ...(threadReactions.data || [])
-  ];
+  // Group reactions by parent_id and parent_type for efficient lookup
+  const reactionsByParent = new Map<string, Map<string, ReactionResponse[]>>()
+  
+  // Helper to add reactions to the grouped map
+  const addReactionsToGroup = (reactions: any[] | null) => {
+    if (!reactions) return
+    reactions.forEach(r => {
+      // Skip if the joined message check failed or parent type doesn't match
+      const joinedMessage = r.channel_messages?.[0] || r.direct_messages?.[0] || r.thread_messages?.[0]
+      if (!joinedMessage || 
+          joinedMessage.message_id !== parseInt(r.parent_id) || 
+          (r.parent_type !== 'thread_message' && r.parent_type !== (viewType === "channel" ? "channel_message" : "direct_message"))) {
+        return
+      }
 
-  if (mainReactions.error) {
-    console.error('[ChatServer] Error fetching main reactions:', mainReactions.error);
+      const key = `${r.parent_type}:${r.parent_id}`
+      if (!reactionsByParent.has(key)) {
+        reactionsByParent.set(key, new Map())
+      }
+      const parentGroup = reactionsByParent.get(key)!
+      if (!parentGroup.has(r.emoji)) {
+        parentGroup.set(r.emoji, [])
+      }
+      parentGroup.get(r.emoji)!.push({
+        reaction_id: r.reaction_id,
+        emoji: r.emoji,
+        user_id: r.user_id,
+        parent_id: r.parent_id,
+        parent_type: r.parent_type,
+        inserted_at: r.inserted_at
+      })
+    })
   }
 
-  if (threadReactions.error) {
-    console.error('[ChatServer] Error fetching thread reactions:', threadReactions.error);
-  }
+  // Add reactions to grouped map
+  addReactionsToGroup(mainReactions.data)
+  addReactionsToGroup(threadReactions.data)
 
-  // Group reactions by parent message, parent type, and emoji
-  const reactionsByMessage = new Map<string, Map<string, Set<string>>>()
-  reactions?.forEach(reaction => {
-    // Create a composite key using both parent_id and parent_type
-    const compositeKey = `${reaction.parent_id}:${reaction.parent_type}`
-    if (!reactionsByMessage.has(compositeKey)) {
-      reactionsByMessage.set(compositeKey, new Map())
-    }
-    const messageReactions = reactionsByMessage.get(compositeKey)!
-    if (!messageReactions.has(reaction.emoji)) {
-      messageReactions.set(reaction.emoji, new Set())
-    }
-    messageReactions.get(reaction.emoji)!.add(reaction.user_id)
-  })
-
-  // Helper function to format reactions
-  const formatReactions = (messageId: string, parentType: 'channel_message' | 'direct_message' | 'thread_message') => {
-    const compositeKey = `${messageId}:${parentType}`
-    const messageReactions = reactionsByMessage.get(compositeKey)
-    return messageReactions ? Array.from(messageReactions.entries()).map(([emoji, users]) => ({
-      emoji,
-      count: users.size,
-      reacted_by_me: users.has(authUser.id)
-    })) : []
+  // Helper to get reactions for a specific message
+  const getReactionsForMessage = (messageId: string, parentType: 'channel_message' | 'direct_message' | 'thread_message') => {
+    const key = `${parentType}:${messageId}`
+    const parentGroup = reactionsByParent.get(key)
+    if (!parentGroup) return []
+    return Array.from(parentGroup.values()).flat().filter(r => r.parent_type === parentType)
   }
 
   // Group thread messages by parent and include reactions
@@ -222,55 +224,87 @@ export async function ChatServer({ viewType, id }: ChatServerProps) {
       threadMessagesByParent.set(key, [])
     }
     const userProfile = userMap.get(tm.user_id)
+    const baseMessage = formatMessageForDisplay({ message: tm })
+    const threadReactions = formatReactions({
+      reactions: getReactionsForMessage(tm.message_id.toString(), 'thread_message'),
+      currentUserId: user.id,
+      expectedParentType: 'thread_message'
+    })
     threadMessagesByParent.get(key)?.push({
-      id: tm.message_id.toString(),
-      message: tm.message || "",
-      inserted_at: tm.inserted_at,
+      ...baseMessage,
       profiles: userProfile || { id: tm.user_id, username: "Unknown User" },
-      reactions: formatReactions(tm.message_id.toString(), 'thread_message')
+      reactions: threadReactions
     })
   })
 
-  const formattedMessages: DisplayMessage[] = (messages || []).map(msg => {
+  const formattedMessages: DisplayMessage[] = (messages.data || []).map(msg => {
     if (viewType === "channel") {
       const m = msg as ChannelMessage
+      const baseMessage = formatMessageForDisplay({ message: m })
+      const messageReactions = formatReactions({
+        reactions: getReactionsForMessage(m.message_id.toString(), 'channel_message'),
+        currentUserId: user.id,
+        expectedParentType: 'channel_message'
+      })
+      
       return {
-        id: m.message_id.toString(),
-        message: m.message || "",
-        inserted_at: m.inserted_at,
+        ...baseMessage,
+        message_id: m.message_id.toString(),
         profiles: userMap.get(m.user_id) || { id: m.user_id, username: "Unknown User" },
-        thread_messages: threadMessagesByParent.get(m.message_id.toString())?.map(tm => ({
-          ...tm,
-          message: tm.message || ""
-        })),
-        reactions: formatReactions(m.message_id.toString(), 'channel_message')
+        thread_messages: threadMessagesByParent.get(m.message_id.toString())?.map(tm => {
+          const threadReactions = formatReactions({
+            reactions: getReactionsForMessage((tm.message_id || tm.id).toString(), 'thread_message'),
+            currentUserId: user.id,
+            expectedParentType: 'thread_message'
+          })
+          return {
+            ...tm,
+            message: tm.message || "",
+            reactions: threadReactions
+          }
+        }),
+        reactions: messageReactions
       }
     } else {
       const m = msg as DirectMessage
+      const baseMessage = formatMessageForDisplay({ message: m })
+      const messageReactions = formatReactions({
+        reactions: getReactionsForMessage(m.message_id.toString(), 'direct_message'),
+        currentUserId: user.id,
+        expectedParentType: 'direct_message'
+      })
+      
       return {
-        id: m.message_id.toString(),
-        message: m.message || "",
-        inserted_at: m.inserted_at,
+        ...baseMessage,
+        message_id: m.message_id.toString(),
         profiles: userMap.get(m.sender_id) || { id: m.sender_id, username: "Unknown User" },
-        thread_messages: threadMessagesByParent.get(m.message_id.toString())?.map(tm => ({
-          ...tm,
-          message: tm.message || ""
-        })),
-        reactions: formatReactions(m.message_id.toString(), 'direct_message')
+        thread_messages: threadMessagesByParent.get(m.message_id.toString())?.map(tm => {
+          const threadReactions = formatReactions({
+            reactions: getReactionsForMessage((tm.message_id || tm.id).toString(), 'thread_message'),
+            currentUserId: user.id,
+            expectedParentType: 'thread_message'
+          })
+          return {
+            ...tm,
+            message: tm.message || "",
+            reactions: threadReactions
+          }
+        }),
+        reactions: messageReactions
       }
     }
   })
 
   return (
     <ChatClient
-      channels={channels || []}
-      users={users || []}
-      messages={formattedMessages}
-      currentView={{
+      channels={channels}
+      users={allUsers}
+      initialMessages={formattedMessages}
+      initialView={{
         type: viewType,
-        data: currentViewData as Channel | User
+        data: currentView
       }}
-      currentUser={currentUser}
+      currentUser={currentUserData}
     />
   )
 } 

@@ -1,29 +1,272 @@
 "use client"
 
+import { useState, useRef, KeyboardEvent } from "react"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Bold,
+  Italic,
+  Strikethrough,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Code,
+  ArrowUp,
+  Image as ImageIcon
+} from "lucide-react"
+import ContentEditable, { ContentEditableEvent } from "react-contenteditable"
+import TurndownService from "turndown"
+import { createClient } from "@/utils/supabase/client"
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced'
+})
+
 interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string) => Promise<void>
+  onSendMessage: (message: string, files?: Array<{ url: string, type: string, name: string }>) => Promise<void>
 }
 
 export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) {
+  const [html, setHtml] = useState("")
+  const [linkUrl, setLinkUrl] = useState("")
+  const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ url: string, type: string, name: string }>>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const contentEditableRef = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (html.trim() || uploadedFiles.length > 0) {
+      // Convert HTML to Markdown
+      const markdown = html.trim() ? turndownService.turndown(html) : ""
+      
+      if (markdown.trim() || uploadedFiles.length > 0) {
+        await onSendMessage(markdown, uploadedFiles)
+        setHtml("")
+        setUploadedFiles([])
+      }
+    }
+  }
+
+  const handleFileUpload = async (files: FileList) => {
+    setIsUploading(true)
+    try {
+      const newFiles: Array<{ url: string, type: string, name: string }> = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        if (file.type.startsWith('image/')) {
+          const fileName = `${Date.now()}-${file.name}`
+          const { data, error } = await supabase.storage
+            .from('chat-attachments')
+            .upload(fileName, file)
+
+          if (error) throw error
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('chat-attachments')
+            .getPublicUrl(fileName)
+
+          newFiles.push({
+            url: publicUrl,
+            type: file.type,
+            name: file.name
+          })
+        }
+      }
+      setUploadedFiles(prev => [...prev, ...newFiles])
+    } catch (error) {
+      console.error('Error uploading file:', error)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
+  const execCommand = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value)
+    if (contentEditableRef.current) {
+      contentEditableRef.current.focus()
+    }
+  }
+
+  const handleChange = (evt: ContentEditableEvent) => {
+    setHtml(evt.target.value)
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text/plain')
+    document.execCommand('insertText', false, text)
+  }
+
+  const insertLink = () => {
+    if (linkUrl) {
+      execCommand("createLink", linkUrl)
+      setLinkUrl("")
+      setIsLinkPopoverOpen(false)
+    }
+  }
+
   return (
     <div className="px-4 py-3 bg-white border-t border-gray-200">
-      <form onSubmit={async (e) => {
-        e.preventDefault()
-        const form = e.currentTarget
-        const formData = new FormData(form)
-        const message = formData.get('message') as string
-        if (message.trim()) {
-          await onSendMessage(message)
-          form.reset()
-        }
-      }}>
-        <input
-          type="text"
-          name="message"
-          placeholder={placeholder}
-          className="w-full p-2 rounded bg-white border border-gray-300 text-gray-700 placeholder-gray-500 focus:outline-none focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700]"
-        />
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          {/* Formatting Toolbar */}
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => execCommand("bold")}
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => execCommand("italic")}
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => execCommand("strikeThrough")}
+            >
+              <Strikethrough className="h-4 w-4" />
+            </Button>
+            <Popover open={isLinkPopoverOpen} onOpenChange={setIsLinkPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <LinkIcon className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3">
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="Enter URL"
+                    className="flex-1 p-1 text-sm border rounded"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={insertLink}
+                    className="bg-[#BF5700] hover:bg-[#A64A00] text-white"
+                  >
+                    Insert
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => execCommand("insertUnorderedList")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => execCommand("insertOrderedList")}
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              multiple
+              onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <ImageIcon className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Message Input with Send Button */}
+          <div className="relative flex flex-col gap-2">
+            {uploadedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg">
+                {uploadedFiles.map((file, index) => (
+                  <div key={index} className="relative group">
+                    <img 
+                      src={file.url} 
+                      alt={file.name}
+                      className="h-20 w-20 object-cover rounded"
+                    />
+                    <button
+                      type="button"
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setUploadedFiles(files => files.filter((_, i) => i !== index))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <div 
+                onKeyPress={handleKeyPress}
+                className="flex-1"
+              >
+                <ContentEditable
+                  innerRef={contentEditableRef}
+                  html={html}
+                  onChange={handleChange}
+                  onPaste={handlePaste}
+                  className="min-h-[75px] max-h-[200px] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700]"
+                  placeholder={placeholder}
+                  tagName="div"
+                />
+              </div>
+              <Button 
+                type="submit"
+                size="icon"
+                className="h-10 w-10 rounded-full bg-[#BF5700] hover:bg-[#A64A00] text-white shadow-md"
+                disabled={isUploading}
+              >
+                <ArrowUp className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
   )

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Channel, User } from "@/types/database"
 import clsx from "clsx"
+import { useUsers } from "@/lib/hooks/use-users"
 
 interface SidebarProps {
   channels: Channel[]
@@ -13,7 +14,15 @@ interface SidebarProps {
   }
 }
 
-export function Sidebar({ channels, users, currentView }: SidebarProps) {
+export function Sidebar({ channels, users: initialUsers, currentView }: SidebarProps) {
+  // Use users hook for real-time updates and status
+  const { users: realtimeUsers } = useUsers()
+  
+  // Combine initial users with realtime updates
+  const users = Object.values(realtimeUsers).length > 0 
+    ? Object.values(realtimeUsers)
+    : initialUsers
+
   return (
     <div className="w-64 bg-[#BF5700] text-white flex flex-col">
       <div className="flex items-center justify-between p-4">
@@ -57,7 +66,13 @@ export function Sidebar({ channels, users, currentView }: SidebarProps) {
                     : ''
                 }`}
               >
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                <span 
+                  className={clsx(
+                    "w-2 h-2 rounded-full mr-2",
+                    user.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'
+                  )}
+                  title={user.status === 'ONLINE' ? 'Online' : 'Offline'}
+                />
                 {user.username}
               </Link>
             </li>
