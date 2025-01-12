@@ -1,5 +1,7 @@
 "use server"
 
+import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 import { requireAuth } from '@/lib/utils/auth'
 import { insertRecord, updateRecord, deleteRecord } from '@/lib/utils/supabase-helpers'
 import type { Channel } from '@/types/database'
@@ -68,4 +70,47 @@ export async function deleteChannel({ channelId }: DeleteChannelProps) {
       revalidatePath: '/channels/[id]'
     }
   })
+}
+
+export async function ensureDefaultChannels() {
+  const user = await requireAuth({ throwOnMissingProfile: true })
+  const supabase = await createClient()
+
+  // Create general channel if it doesn't exist
+  const { count: generalExists } = await supabase
+    .from('channels')
+    .select('*', { count: 'exact', head: true })
+    .eq('slug', 'general')
+
+  if (!generalExists) {
+    await insertRecord<Channel>({
+      table: 'channels',
+      data: {
+        slug: 'general',
+        created_by: user.id
+      },
+      options: {
+        revalidatePath: '/channels/[id]'
+      }
+    })
+  }
+
+  // Create random channel if it doesn't exist
+  const { count: randomExists } = await supabase
+    .from('channels')
+    .select('*', { count: 'exact', head: true })
+    .eq('slug', 'random')
+
+  if (!randomExists) {
+    await insertRecord<Channel>({
+      table: 'channels',
+      data: {
+        slug: 'random',
+        created_by: user.id
+      },
+      options: {
+        revalidatePath: '/channels/[id]'
+      }
+    })
+  }
 } 
