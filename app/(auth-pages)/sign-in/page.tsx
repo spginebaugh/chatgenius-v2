@@ -1,14 +1,19 @@
 import { Suspense } from 'react'
 import LoginForm from './login-form'
 
-export default function Page({
+interface Message {
+  message?: string
+}
+
+export default async function Page({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<Message>
 }) {
+  const params = await searchParams
   return (
     <Suspense>
-      <LoginForm message={searchParams.message as string | undefined} />
+      <LoginForm message={params.message} />
     </Suspense>
   )
 }
