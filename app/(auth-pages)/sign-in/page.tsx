@@ -8,15 +8,11 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
-export function Login(props: { searchParams: Promise<Message> }) {
-  const [searchParams, setSearchParams] = useState<Message>({ message: "" });
+interface LoginProps {
+  searchParams?: { message?: string }
+}
 
-  useEffect(() => {
-    props.searchParams.then((params) => {
-      if (params) setSearchParams(params);
-    });
-  }, [props.searchParams]);
-
+function LoginForm({ message }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center w-full">
       <form className="w-full max-w-sm">
@@ -70,11 +66,13 @@ export function Login(props: { searchParams: Promise<Message> }) {
             </p>
           </div>
 
-          <FormMessage message={searchParams} />
+          {message && <FormMessage message={{ message }} />}
         </div>
       </form>
     </div>
   );
 }
 
-export default Login;
+export default function Page({ searchParams }: LoginProps) {
+  return <LoginForm message={searchParams?.message} />;
+}
