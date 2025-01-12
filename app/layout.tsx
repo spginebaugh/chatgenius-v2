@@ -24,7 +24,7 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-export function RootLayout({
+export default function Layout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -54,5 +54,3 @@ export function RootLayout({
     </html>
   );
 }
-
-export default RootLayout;
