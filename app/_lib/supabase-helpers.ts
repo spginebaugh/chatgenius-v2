@@ -1,6 +1,7 @@
-import { createClient } from '@/utils/supabase/server'
-import { FetchError } from '@/lib/fetching/helpers'
-import type { SupabaseClient, PostgrestError, RealtimeChannel } from '@supabase/supabase-js'
+import { createClient } from '@/app/_lib/supabase-server'
+import { FetchError } from '@/app/_lib/fetch-helpers'
+import type { SupabaseClient, PostgrestError, RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import { revalidatePath as nextRevalidatePath } from 'next/cache'
 
 type DbClient = SupabaseClient
 type DbRecord = Record<string, any>
@@ -72,7 +73,7 @@ export async function executeQuery<T>({
   errorMap = {},
   revalidatePath
 }: ExecuteQueryProps<T>): Promise<T> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   try {
     const { data, error } = await query(supabase)
@@ -104,6 +105,10 @@ export async function executeQuery<T>({
       )
     }
 
+    if (revalidatePath) {
+      nextRevalidatePath(revalidatePath)
+    }
+
     return data as T
   } catch (error) {
     if (error instanceof FetchError) {
@@ -128,6 +133,8 @@ export async function insertRecord<T extends DbRecord>({
   select = '*',
   options = {}
 }: InsertRecordProps<T>): Promise<T> {
+  const supabase = await createClient()
+
   return executeQuery<T>({
     query: async (supabase) => {
       const result = await supabase
@@ -148,22 +155,32 @@ export async function insertRecord<T extends DbRecord>({
 export async function updateRecord<T extends DbRecord>({
   table,
   data,
-  match,
+  match = {},
   select = '*',
   options = {}
 }: UpdateRecordProps<T>): Promise<T> {
+  const supabase = await createClient()
+
   return executeQuery<T>({
     query: async (supabase) => {
+      console.log(`Updating ${table} with data:`, data)
+      console.log(`Match conditions:`, match)
+      
       let query = supabase
         .from(table)
         .update(data)
 
-      // Add all match conditions
-      Object.entries(match).forEach(([key, value]) => {
-        query = query.eq(key, value)
-      })
+      // Add all match conditions if match object exists
+      if (match) {
+        Object.entries(match).forEach(([key, value]) => {
+          if (value !== undefined) {
+            query = query.eq(key, value)
+          }
+        })
+      }
 
       const result = await query.select(select).single()
+      console.log(`Update result:`, result)
       return result as QueryResult<T>
     },
     ...options
@@ -175,19 +192,25 @@ export async function updateRecord<T extends DbRecord>({
  */
 export async function deleteRecord<T extends DbRecord>({
   table,
-  match,
+  match = {},
   options = {}
 }: DeleteRecordProps<T>): Promise<void> {
+  const supabase = await createClient()
+
   await executeQuery<null>({
     query: async (supabase) => {
       let query = supabase
         .from(table)
         .delete()
 
-      // Add all match conditions
-      Object.entries(match).forEach(([key, value]) => {
-        query = query.eq(key, value)
-      })
+      // Add all match conditions if match object exists
+      if (match) {
+        Object.entries(match).forEach(([key, value]) => {
+          if (value !== undefined) {
+            query = query.eq(key, value)
+          }
+        })
+      }
 
       const result = await query
       return result as QueryResult<null>
@@ -205,18 +228,28 @@ export async function selectRecords<T extends DbRecord>({
   match = {},
   options = {}
 }: SelectRecordsProps<T>): Promise<T[]> {
+  const supabase = await createClient()
+
   return executeQuery<T[]>({
     query: async (supabase) => {
+      console.log(`Selecting from ${table} with match conditions:`, match)
+      
       let query = supabase
         .from(table)
         .select(select)
 
-      // Add all match conditions
-      Object.entries(match).forEach(([key, value]) => {
-        query = query.eq(key, value)
-      })
+      // Add all match conditions if match object exists
+      if (match) {
+        Object.entries(match).forEach(([key, value]) => {
+          if (value !== undefined) {
+            console.log(`Adding match condition: ${key} = ${value}`)
+            query = query.eq(key, value)
+          }
+        })
+      }
 
       const result = await query
+      console.log(`Select result:`, result)
       return result as QueryResult<T[]>
     },
     ...options
@@ -234,24 +267,24 @@ export async function setupSubscription<T extends DbRecord>({
   onError = console.error,
   onPayload
 }: SetupSubscriptionProps<T>): Promise<RealtimeChannel> {
-  const supabase = await createClient()
+  const supabase = createClient()
   
   return supabase
     .channel(`${table}-changes`)
     .on(
-      'postgres_changes' as any, // Type assertion needed due to Supabase types
+      'postgres_changes' as 'system',
       {
         event,
         schema,
         table,
         filter
       },
-      (payload: any) => {
+      (payload: RealtimePostgresChangesPayload<T>) => {
         try {
           onPayload({
             eventType: payload.eventType,
-            new: payload.new,
-            old: payload.old
+            new: (payload.new || null) as T | null,
+            old: (payload.old || null) as T | null
           })
         } catch (error) {
           onError(error instanceof Error ? error : new Error('Unknown error'))

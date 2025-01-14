@@ -6,28 +6,35 @@ Our application uses a hybrid approach to data fetching, leveraging both Server 
 
 ## Server-Side Data Fetching
 
-### Server Components (`lib/queries.ts`)
+### Server Components (`app/_lib/`)
 
-We use Server Components as the primary method for initial data loading:
+Server components can directly import query functions from the appropriate module:
 
 ```typescript
-// In a Server Component
-import { getChannelMessages } from '@/lib/queries'
-
-async function ChannelView({ channelId }: { channelId: string }) {
-  const messages = await getChannelMessages(channelId)
-  return <MessageList initialData={messages} />
-}
+import { getChannelMessages } from '@/app/_lib'
+// or import specific functions from their modules
+import { getChannelMessages } from '@/app/_lib/message-queries'
 ```
 
-Available queries:
-- `getChannels()`: Fetch all channels
-- `getUsers()`: Fetch all users
-- `getCurrentUser()`: Get authenticated user
-- `getChannelMessages(channelId)`: Get messages for a channel
-- `getDirectMessages(userId, otherUserId)`: Get direct messages
-- `getThreadMessages(parentId, parentType)`: Get thread messages
-- `getReactions(messageId, messageType)`: Get message reactions
+Available queries are organized by domain:
+
+- Channel queries (`fetch-channels.ts`):
+  - `getChannels()`
+
+- User queries (`fetch-users.ts`):
+  - `getUsers()`
+  - `getCurrentUser()`
+
+- Message queries (`message-queries.ts`):
+  - `getChannelMessages(channelId)`
+  - `getDirectMessages(userId, otherUserId)`
+  - `getMessageReactions(messageId)`
+
+- Message mutations (`message-mutations.ts`):
+  - `sendMessage(message)`
+  - `toggleReaction(messageId, emoji)`
+  - `addFileToMessage(messageId, fileUrl, fileType)`
+  - `addMentionToMessage(messageId, mentionedUserId)`
 
 ### Error Handling
 

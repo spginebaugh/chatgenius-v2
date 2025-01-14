@@ -3,41 +3,39 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { updateUsername } from "@/app/actions/profile"
+import { toast } from "sonner"
 
-export default function ProfileSettings() {
-  const [username, setUsername] = useState("")
+interface ProfileSettingsFormProps {
+  currentUsername: string | null
+}
+
+export default function ProfileSettingsForm({ currentUsername }: ProfileSettingsFormProps) {
+  const [username, setUsername] = useState(currentUsername || "")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError("You must be logged in to update your profile")
+    try {
+      const { error } = await updateUsername({ username })
+      if (error) {
+        toast.error(error)
+      } else {
+        toast.success("Username updated successfully")
+        router.refresh()
+        router.push("/")
+      }
+    } catch (error) {
+      toast.error("Failed to update username. Please try again.")
+      console.error("Error updating username:", error)
+    } finally {
       setIsLoading(false)
-      return
     }
-
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ username })
-      .eq("id", user.id)
-
-    if (updateError) {
-      setError(updateError.message)
-    } else {
-      router.refresh()
-      router.push("/")
-    }
-    setIsLoading(false)
   }
 
   return (
@@ -53,8 +51,10 @@ export default function ProfileSettings() {
             placeholder="Enter your new username"
             required
           />
+          <p className="text-sm text-gray-500 mt-1">
+            Username must be between 3 and 20 characters and can only contain letters, numbers, underscores, and hyphens.
+          </p>
         </div>
-        {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit" disabled={isLoading}>
           {isLoading ? "Updating..." : "Update Username"}
         </Button>

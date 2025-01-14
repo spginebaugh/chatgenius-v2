@@ -1,12 +1,12 @@
 "use server";
 
-import { encodedRedirect } from "@/utils/utils";
-import { createClient } from "@/utils/supabase/server";
+import { encodedRedirect } from "@/lib/utils";
+import { createClient } from "@/app/_lib/supabase-server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { updateRecord } from '@/lib/utils/supabase-helpers';
-import type { User } from '@/types/database';
+import { updateRecord, selectRecords } from '@/app/_lib/supabase-helpers';
+import type { User, Channel } from '@/types/database';
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -64,37 +64,57 @@ export const signInAction = async (formData: FormData) => {
   console.log('[SignInAction] Sign-in successful, user:', data.user?.id);
   console.log('[SignInAction] Session created:', !!data.session);
 
-  // Update user status to ONLINE
-  await updateRecord<User>({
-    table: 'users',
-    data: { 
-      status: 'ONLINE',
-      last_active_at: new Date().toISOString()
-    },
-    match: { id: data.user.id },
-    options: {
-      errorMap: {
-        'not_found': {
-          message: 'User profile not found',
-          status: 404
+  try {
+    // First check if user exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', data.user.id)
+      .single();
+
+    if (!existingUser) {
+      // Create user record if it doesn't exist
+      await supabase
+        .from('users')
+        .insert({
+          id: data.user.id,
+          username: email.split('@')[0],
+          status: 'ONLINE',
+          last_active_at: new Date().toISOString()
+        });
+    } else {
+      // Update existing user's status
+      await updateRecord<User>({
+        table: 'users',
+        data: { 
+          status: 'ONLINE',
+          last_active_at: new Date().toISOString()
+        },
+        match: { id: data.user.id }
+      });
+    }
+
+    // Get the first channel or default to channel 1
+    const channels = await selectRecords<Channel>({
+      table: 'channels',
+      select: 'id',
+      options: {
+        errorMap: {
+          NOT_FOUND: { 
+            message: 'No channels found',
+            status: 404
+          }
         }
       }
-    }
-  });
-
-  // Get the first channel or default to channel 1
-  const { data: channels, error: channelError } = await supabase
-    .from('channels')
-    .select('channel_id')
-    .limit(1);
-  
-  if (channelError) {
-    console.error('[SignInAction] Error fetching channels:', channelError.message);
-    return encodedRedirect("error", "/sign-in", "Error fetching channels");
+    });
+    
+    const channelId = channels?.[0]?.id || 1;
+    return redirect(`/channel/${channelId}`);
+  } catch (error) {
+    console.error('[SignInAction] Error updating user status:', error);
+    // Continue with redirect even if status update fails
+    return redirect(`/channel/1`);
   }
-
-  const channelId = channels?.[0]?.channel_id || '1';
-  return redirect(`/channel/${channelId}`);
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -181,7 +201,15 @@ export const signOutAction = async () => {
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         },
-        match: { id: user.id }
+        match: { id: user.id },
+        options: {
+          errorMap: {
+            NOT_FOUND: {
+              message: 'User profile not found',
+              status: 404
+            }
+          }
+        }
       });
 
       // Wait a moment for the status update to propagate
@@ -209,7 +237,15 @@ export async function logout() {
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         },
-        match: { id: user.id }
+        match: { id: user.id },
+        options: {
+          errorMap: {
+            NOT_FOUND: {
+              message: 'User profile not found',
+              status: 404
+            }
+          }
+        }
       });
 
       // Wait a moment for the status update to propagate

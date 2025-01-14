@@ -1,17 +1,17 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useState, useCallback } from "react"
-import { Channel, User } from "@/types/database"
+import { useEffect, useState, useCallback, memo } from "react"
+import { Channel, User, DbMessage, MessageFile, MessageReaction } from "@/types/database"
+import { UiMessage } from "@/types/messages-ui"
+import { FileAttachment } from "@/app/_lib/message-helpers"
 import { ChatLayout } from "./chat-layout"
 import { useMessagesStore } from "@/lib/stores/messages"
-import { useUsersStore } from "@/lib/stores/users"
 import { useChannelsStore } from "@/lib/stores/channels"
-import { useMessages } from "@/lib/hooks/use-messages"
-import { useRealtimeMessages } from "@/lib/hooks/use-realtime-messages"
-import { useUsers } from "@/lib/hooks/use-users"
-import { useChannels } from "@/lib/hooks/use-channels"
-import { addEmojiReaction } from "@/app/actions/messages"
+import { useRealtimeMessages } from "@/lib/client/hooks/use-realtime-messages"
+import { useRealtimeUsers } from "@/lib/client/hooks/use-realtime-users"
+import { useRealtimeChannels } from "@/lib/client/hooks/use-realtime-channels"
+import { addEmojiReaction, handleMessage } from "@/app/actions/messages"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ProfileSettingsPanel } from "./profile-settings-panel"
-import { ReactionType } from '@/types/frontend'
-import { createClient } from "@/utils/supabase/client"
+import { createClient } from "@/lib/supabase/client"
+import { ChatClientFetch } from "./chat-client-fetch"
 
 interface ChatClientProps {
   initialView: {
@@ -30,214 +30,321 @@ interface ChatClientProps {
   currentUser: User
   channels: Channel[]
   users: User[]
-  initialMessages: Array<{
-    id: string
-    message: string
-    inserted_at: string
-    profiles: {
-      id: string
-      username: string
-    }
-    thread_messages?: Array<{
-      id: string
-      message: string
-      inserted_at: string
-      profiles: {
-        id: string
-        username: string
-      }
-    }>
-    reactions?: ReactionType[]
-  }>
+  initialMessages: UiMessage[]
 }
 
-export function ChatClient({ initialView, currentUser, channels, users, initialMessages }: ChatClientProps) {
+function ChatClientComponent({ initialView, currentUser, channels, users, initialMessages }: ChatClientProps) {
   const router = useRouter()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const { updateReactions, setMessages, addMessage, deleteMessage } = useMessagesStore()
-  const { updateUserStatus, setUsers: setStoreUsers, setCurrentUser } = useUsersStore()
+  const { updateReactions, setMessages, addMessage, deleteMessage, messages: storeMessages } = useMessagesStore()
   const { setActiveChannel } = useChannelsStore()
-  const { users: realtimeUsers } = useUsers()
+  
+  // Store SSR users in local state
+  const [storeUsers, setStoreUsers] = useState<User[]>(users)
+  const [currentStoreUser, setCurrentStoreUser] = useState<User>(currentUser)
 
-  // Initialize stores with initial data
-  useEffect(() => {
-    setStoreUsers(users)
-    setCurrentUser(currentUser)
-    setMessages(initialView.type === 'channel' 
-      ? String((initialView.data as Channel).channel_id)
-      : String((initialView.data as User).id), 
-      initialMessages
-    )
-
-    users.forEach(user => {
-      if (user.status === 'ONLINE') {
-        updateUserStatus(user.id, 'ONLINE')
-      }
-    })
-  }, [setStoreUsers, setCurrentUser, setMessages, updateUserStatus, users, currentUser, initialMessages, initialView])
-
-  // Update local state when realtime users change
-  useEffect(() => {
-    const updatedCurrentUser = realtimeUsers[currentUser.id]
-    if (updatedCurrentUser) {
-      setCurrentUser(updatedCurrentUser)
-    }
-  }, [realtimeUsers, currentUser.id, setCurrentUser])
-
-  // Get key and ID based on view type
+  // Get key and type based on view type
+  const messageType = initialView.type === 'channel' ? 'channels' as const : 'dms' as const
   const key = initialView.type === 'channel' 
-    ? String((initialView.data as Channel).channel_id)
-    : String((initialView.data as User).id)
+    ? `channels:${(initialView.data as Channel).id.toString()}` // Convert channel ID to string with prefix
+    : `dms:${(initialView.data as User).id}` // DM user ID is already a string, add prefix
 
-  // Get messages and actions
-  const { messages, sendMessage } = useMessages({
-    channelId: initialView.type === 'channel' ? key : undefined,
-    userId: currentUser.id,
-    viewType: initialView.type,
-    currentViewData: {
-      id: key,
-      type: initialView.type
+  // Get current messages for the active view
+  const currentMessages = storeMessages[messageType][key] || []
+
+  // Initialize messages store with initial data
+  useEffect(() => {
+    console.log("Effect running with:", {
+      messageType,
+      key,
+      initialMessagesLength: initialMessages?.length,
+      storeUsers: storeUsers?.length
+    })
+
+    if (!messageType || !key) {
+      console.warn("Missing messageType or key:", { messageType, key })
+      return
     }
+
+    if (!Array.isArray(initialMessages)) {
+      console.warn("initialMessages is not an array:", initialMessages)
+      return
+    }
+
+    // Map messages using storeUsers for consistent user data
+    const mappedMessages = initialMessages
+      .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
+      .map(msg => {
+        const user = storeUsers.find(u => u.id === msg.user_id)
+        console.log("Mapping message:", {
+          messageId: msg.id,
+          userId: msg.user_id,
+          foundUser: !!user
+        })
+
+        // Create the base message with user info
+        const mappedMessage: UiMessage = {
+          ...msg,
+          profiles: {
+            id: user?.id || msg.user_id,
+            username: user?.username || ''
+          },
+          files: [],
+          reactions: []
+        }
+
+        // If this message has thread messages, map those too
+        if (msg.thread_messages?.length) {
+          return {
+            ...mappedMessage,
+            thread_messages: msg.thread_messages.map(threadMsg => {
+              const threadUser = storeUsers.find(u => u.id === threadMsg.user_id)
+              return {
+                ...threadMsg,
+                profiles: {
+                  id: threadUser?.id || threadMsg.user_id,
+                  username: threadUser?.username || ''
+                },
+                files: [],
+                reactions: []
+              }
+            })
+          }
+        }
+
+        return mappedMessage
+      })
+
+    // Set messages in the store
+    setMessages(messageType, key, mappedMessages)
+
+    // Also initialize thread messages in the threads collection
+    const threadMessages = mappedMessages
+      .filter(msg => msg.thread_messages?.length)
+      .flatMap(msg => msg.thread_messages || [])
+
+    if (threadMessages.length) {
+      // Group thread messages by parent ID and ensure parent_message_id is a number
+      const threadsByParent = threadMessages.reduce((acc, msg) => {
+        const parentId = msg.parent_message_id
+        if (typeof parentId === 'number') {
+          if (!acc[parentId]) acc[parentId] = []
+          acc[parentId].push(msg)
+        }
+        return acc
+      }, {} as Record<number, UiMessage[]>)
+
+      // Set each thread's messages in the store
+      Object.entries(threadsByParent).forEach(([parentId, messages]) => {
+        const numericParentId = parseInt(parentId, 10)
+        if (!isNaN(numericParentId)) {
+          setMessages('threads', numericParentId, messages)
+        }
+      })
+    }
+  }, [key, messageType, initialMessages, setMessages, storeUsers])
+
+  // Handle real-time user updates
+  const handleUserUpdate = useCallback((updatedUser: User) => {
+    console.log("Realtime user update:", updatedUser)
+    setStoreUsers(prev => 
+      prev.map(u => u.id === updatedUser.id ? updatedUser : u)
+    )
+    // Update current user if it's them
+    if (updatedUser.id === currentStoreUser.id) {
+      setCurrentStoreUser(updatedUser)
+    }
+  }, [currentStoreUser.id])
+
+  // Setup real-time user updates
+  useRealtimeUsers({
+    onUserUpdate: handleUserUpdate
   })
+
+  // Memoize message handlers
+  const handleNewMessage = useCallback((message: DbMessage) => {
+    console.log("Realtime new message:", message)
+    
+    // Check if message already exists in store
+    const existingMessages = useMessagesStore.getState().messages[messageType][key] || []
+    const existingMessage = existingMessages.find(m => m.id === message.id)
+    
+    // Always process the message if it doesn't exist or if it's more recent
+    if (!existingMessage || new Date(message.inserted_at) > new Date(existingMessage.inserted_at)) {
+      const user = storeUsers.find(u => u.id === message.user_id)
+      const displayMessage: UiMessage = {
+        ...message,
+        profiles: {
+          id: user?.id || message.user_id,
+          username: user?.username || 'Unknown',
+          profile_picture_url: user?.profile_picture_url,
+          status: user?.status
+        },
+        files: message.files || [],
+        reactions: existingMessage?.reactions || []
+      }
+      addMessage(messageType, key, displayMessage)
+    }
+  }, [key, messageType, storeUsers, addMessage])
+
+  const handleMessageDelete = useCallback((message: DbMessage) => {
+    console.log("Realtime message delete:", message)
+    deleteMessage(messageType, key, message.id)
+  }, [key, messageType, deleteMessage])
+
+  const handleMessageUpdate = useCallback((message: DbMessage) => {
+    console.log("Realtime message update:", message)
+    const user = storeUsers.find(u => u.id === message.user_id)
+    const displayMessage: UiMessage = {
+      ...message,
+      profiles: {
+        id: user?.id || message.user_id,
+        username: user?.username || 'Unknown',
+        profile_picture_url: user?.profile_picture_url,
+        status: user?.status
+      },
+      files: [],
+      reactions: []
+    }
+    const messages = useMessagesStore.getState().messages[messageType][key] || []
+    setMessages(messageType, key, messages.map(msg => 
+      msg.id === message.id ? {
+        ...displayMessage,
+        reactions: msg.reactions // Preserve existing reactions
+      } : msg
+    ))
+  }, [key, messageType, storeUsers, setMessages])
+
+  const handleReactionUpdate = useCallback((messageId: number, reactions: MessageReaction[]) => {
+    console.log("Realtime reaction update:", { messageId, reactions })
+    updateReactions(messageType, key, messageId, reactions)
+  }, [key, messageType, updateReactions])
 
   // Setup real-time message updates
   useRealtimeMessages({
-    channelId: initialView.type === 'channel' ? key : undefined,
-    userId: initialView.type === 'dm' ? key : undefined,
-    viewType: initialView.type,
-    currentViewData: initialView.data as User,
-    onNewMessage: (message) => {
-      addMessage(key, message)
-    },
-    onNewThreadMessage: (parentId, message) => {
-      // Handle thread message updates if needed
-    },
-    onMessageDelete: (messageId) => {
-      deleteMessage(key, messageId)
-    },
-    onReactionChange: (messageId, reactions, parentType) => {
-      updateReactions(key, messageId, reactions || [], parentType)
+    channelId: initialView.type === 'channel' ? (initialView.data as Channel).id : undefined,
+    receiverId: initialView.type === 'dm' ? (initialView.data as User).id : undefined,
+    parentMessageId: undefined,
+    onNewMessage: handleNewMessage,
+    onMessageDelete: handleMessageDelete,
+    onMessageUpdate: handleMessageUpdate,
+    onReactionUpdate: handleReactionUpdate
+  })
+
+  // Setup realtime channel updates
+  useRealtimeChannels({
+    onChannelUpdate: (channel) => {
+      console.log("Realtime channel update:", channel)
+      setActiveChannel(channel.id)
     }
   })
 
-  const handleLogout = async () => {
+  const handleSendMessage = async (message: string, files?: FileAttachment[]) => {
     try {
-      const supabase = createClient()
-      
-      // First set user status to offline
-      await supabase
+      await handleMessage({
+        message,
+        files,
+        channelId: initialView.type === 'channel' ? (initialView.data as Channel).id : undefined,
+        receiverId: initialView.type === 'dm' ? (initialView.data as User).id : undefined
+      })
+    } catch (error) {
+      console.error('Failed to send message:', error instanceof Error ? error.message : 'Unknown error')
+    }
+  }
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    
+    try {
+      // Update user status to offline
+      const updatedUser = { 
+        ...currentStoreUser, 
+        status: 'OFFLINE' as const, 
+        last_active_at: new Date().toISOString() 
+      }
+      setCurrentStoreUser(updatedUser)
+      setStoreUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
+
+      const { error: updateError } = await supabase
         .from('users')
         .update({ 
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         })
-        .eq('id', currentUser.id)
+        .eq('id', currentStoreUser.id)
+
+      if (updateError) {
+        console.error("Failed to update user status:", updateError.message)
+      }
+
+      // Reset message store
+      useMessagesStore.getState().reset()
 
       // Then sign out
-      await supabase.auth.signOut()
+      const { error: signOutError } = await supabase.auth.signOut()
       
+      if (signOutError) {
+        console.error("Sign out failed:", signOutError.message)
+        return
+      }
+
       // Finally redirect
       router.push("/sign-in")
     } catch (error) {
-      console.error("Logout failed:", error)
+      console.error("Logout failed:", error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
-  const handleEmojiSelect = useCallback(async (messageId: string, emoji: string, parent_type?: 'channel_message' | 'direct_message' | 'thread_message') => {
+  const handleEmojiSelect = useCallback(async (messageId: number, emoji: string) => {
     try {
-      const existingMessage = messages.find(msg => msg.id === messageId)
-      if (!existingMessage) return
-
-      // Use provided parent_type or determine based on view type
-      const messageParentType = parent_type || (initialView.type === 'channel' ? 'channel_message' : 'direct_message')
-
-      // Call the server action to toggle the reaction
       await addEmojiReaction({
-        parentId: messageId,
-        parentType: messageParentType,
+        messageId,
         emoji
       })
-
-      // Update local state through the store
-      const existingReactions = existingMessage.reactions || []
-      const reactionExists = existingReactions.some(r => r.emoji === emoji)
-
-      const newReactions: ReactionType[] = reactionExists
-        ? existingReactions.filter(r => r.emoji !== emoji)
-        : [...existingReactions, { emoji, count: 1, reacted_by_me: true }]
-
-      updateReactions(key, messageId, newReactions, messageParentType)
+      // Let the realtime subscription handle the reaction update
     } catch (error) {
       console.error('Failed to toggle reaction:', error)
     }
-  }, [key, messages, updateReactions, initialView.type])
+  }, [])
+
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedMessage, setSelectedMessage] = useState<UiMessage | null>(null)
+
+  const handleReaction = useCallback(async (message: UiMessage, emoji: string) => {
+    try {
+      await addEmojiReaction({
+        messageId: message.id,
+        emoji
+      })
+      // Let the realtime subscription handle the reaction update
+    } catch (error) {
+      console.error('Failed to toggle reaction:', error)
+    }
+  }, [])
+
+  const handleThreadClick = useCallback((message: UiMessage) => {
+    setSelectedMessage(message)
+  }, [])
 
   return (
     <div className="relative">
-      <ChatLayout
-        currentView={initialView}
-        messages={messages}
-        onSendMessage={sendMessage}
-        onEmojiSelect={handleEmojiSelect}
-        channels={channels}
-        users={Object.values(realtimeUsers)}
+      <ChatClientFetch 
+        currentChannelId={initialView.type === 'channel' ? (initialView.data as Channel).id : undefined}
+        currentDmUserId={initialView.type === 'dm' ? (initialView.data as User).id : undefined}
+        currentUser={currentStoreUser}
       />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button 
-            className="absolute top-1 right-4 bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded flex items-center gap-3 border border-white/20"
-          >
-            <div className="flex items-center gap-2">
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="18" 
-                height="18" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-medium leading-none">{realtimeUsers[currentUser.id]?.username || currentUser?.username || 'User'}</span>
-                <span className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${realtimeUsers[currentUser.id]?.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'}`} />
-                  {realtimeUsers[currentUser.id]?.status?.toLowerCase() || currentUser?.status?.toLowerCase() || 'offline'}
-                </span>
-              </div>
-            </div>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[200px] bg-gray-100 border-gray-400 text-gray-900">
-          <DropdownMenuItem 
-            className="hover:bg-gray-200 focus:bg-gray-200 cursor-pointer"
-            onClick={() => setIsProfileOpen(true)}
-          >
-            Change Username
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="hover:bg-gray-200 focus:bg-gray-200 cursor-pointer text-gray-900" 
-            onClick={handleLogout}
-          >
-            Sign Out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {isProfileOpen && (
-        <div className="absolute right-0 top-0 h-full">
-          <div className="flex h-[calc(100vh-3.5rem)] mt-14">
-            <ProfileSettingsPanel
-              currentUsername={realtimeUsers[currentUser.id]?.username || currentUser?.username || ''}
-              onClose={() => setIsProfileOpen(false)}
-            />
-          </div>
-        </div>
-      )}
+      <ChatLayout
+        currentUser={currentStoreUser}
+        users={storeUsers}
+        channels={channels}
+        messages={currentMessages}
+        onSendMessage={handleSendMessage}
+        onEmojiSelect={handleEmojiSelect}
+        initialView={initialView}
+      />
     </div>
   )
-} 
+}
+
+export const ChatClient = memo(ChatClientComponent) 

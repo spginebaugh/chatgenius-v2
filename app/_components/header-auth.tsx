@@ -1,32 +1,22 @@
 import { signOutAction } from "@/app/actions";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+import { checkEnvVars } from "@/lib/supabase/check-env-vars";
 import Link from "next/link";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { createClient } from "@/utils/supabase/server";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/app/_lib/supabase-server";
 import { User } from "@/types/database";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import { CircleIcon } from "lucide-react";
 
 export default async function AuthButton() {
-  const supabase = await createClient();
-
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("username, status")
-    .eq("id", authUser?.id)
-    .single();
-
-  if (!hasEnvVars) {
+  try {
+    checkEnvVars();
+  } catch (error) {
     return (
       <>
         <div className="flex gap-4 items-center">
@@ -61,6 +51,29 @@ export default async function AuthButton() {
         </div>
       </>
     );
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user: authUser },
+    error: authError
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('Error fetching user:', authError.message);
+    return null;
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("username, status")
+    .eq("id", authUser?.id)
+    .single();
+
+  if (userError && authUser) {
+    console.error('Error fetching user data:', userError.message);
+    return null;
   }
 
   return authUser ? (

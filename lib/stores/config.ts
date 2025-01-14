@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { devtools, persist } from 'zustand/middleware'
+import { devtools, persist, PersistStorage, StorageValue } from 'zustand/middleware'
 
 // Create a type-safe store configuration
 export const createStore = <T extends object>(
@@ -7,6 +7,34 @@ export const createStore = <T extends object>(
   name: string,
   storage = true
 ) => {
+  const customStorage: PersistStorage<T> | undefined = typeof window !== 'undefined'
+    ? {
+        getItem: (name): StorageValue<T> | null => {
+          const str = sessionStorage.getItem(name)
+          if (!str) return null
+          try {
+            const data = JSON.parse(str)
+            // Clear old data if it's from a previous session
+            if (data.state && data.version !== process.env.NEXT_PUBLIC_APP_VERSION) {
+              sessionStorage.removeItem(name)
+              return null
+            }
+            return data
+          } catch {
+            return null
+          }
+        },
+        setItem: (name, value) => {
+          const data = {
+            ...value,
+            version: process.env.NEXT_PUBLIC_APP_VERSION
+          }
+          sessionStorage.setItem(name, JSON.stringify(data))
+        },
+        removeItem: (name) => sessionStorage.removeItem(name)
+      }
+    : undefined
+
   return create<T>()(
     devtools(
       persist(
@@ -15,8 +43,7 @@ export const createStore = <T extends object>(
         }),
         {
           name,
-          // Only enable storage in production or when explicitly requested
-          skipHydration: process.env.NODE_ENV === 'development' && !storage,
+          storage: storage ? customStorage : undefined
         }
       )
     )

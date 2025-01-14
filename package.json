@@ -11,6 +11,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
+    "@pinecone-database/pinecone": "^4.1.0",
     "@radix-ui/react-checkbox": "^1.1.1",
     "@radix-ui/react-dropdown-menu": "^2.1.1",
     "@radix-ui/react-label": "^2.1.0",
@@ -26,6 +27,7 @@
     "clsx": "^2.1.1",
     "cookies-next": "^5.0.2",
     "date-fns": "^4.1.0",
+    "langchain": "^0.3.11",
     "lucide-react": "^0.468.0",
     "next": "15.1.4",
     "next-themes": "^0.4.3",

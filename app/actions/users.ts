@@ -1,8 +1,10 @@
 'use server'
 
-import { requireAuth } from '@/lib/utils/auth'
-import { updateRecord } from '@/lib/utils/supabase-helpers'
-import type { User } from '@/types/database'
+import { createClient } from '@/app/_lib/supabase-server'
+import { requireAuth } from '@/app/_lib/auth'
+import { revalidatePath } from 'next/cache'
+import { updateRecord } from '@/app/_lib/supabase-helpers'
+import type { User, UserStatus } from '@/types/database'
 
 interface UpdateUserProfileProps {
   username?: string
@@ -11,7 +13,7 @@ interface UpdateUserProfileProps {
 }
 
 interface UpdateUserStatusProps {
-  status: 'ONLINE' | 'OFFLINE'
+  status: UserStatus
 }
 
 export async function updateUserProfile({ username, profile_picture_url, bio }: UpdateUserProfileProps) {
@@ -22,13 +24,20 @@ export async function updateUserProfile({ username, profile_picture_url, bio }: 
     data: {
       username,
       profile_picture_url,
-      bio
+      bio,
+      last_active_at: new Date().toISOString()
     },
     match: {
       id: user.id
     },
     options: {
-      revalidatePath: '/settings/profile'
+      revalidatePath: '/settings/profile',
+      errorMap: {
+        NOT_FOUND: {
+          message: 'User profile not found',
+          status: 404
+        }
+      }
     }
   })
 }
@@ -46,7 +55,13 @@ export async function updateUserStatus({ status }: UpdateUserStatusProps) {
       id: user.id
     },
     options: {
-      revalidatePath: '/channels/[id]'
+      revalidatePath: '/channel/[id]',
+      errorMap: {
+        NOT_FOUND: {
+          message: 'User profile not found',
+          status: 404
+        }
+      }
     }
   })
 } 

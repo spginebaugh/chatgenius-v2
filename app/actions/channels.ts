@@ -1,59 +1,64 @@
 "use server"
 
-import { createClient } from '@/utils/supabase/server'
-import { cookies } from 'next/headers'
-import { requireAuth } from '@/lib/utils/auth'
-import { insertRecord, updateRecord, deleteRecord } from '@/lib/utils/supabase-helpers'
+import { createClient } from '@/app/_lib/supabase-server'
+import { revalidatePath } from 'next/cache'
+import { requireAuth } from '@/app/_lib/auth'
+import { insertRecord, updateRecord, deleteRecord, selectRecords } from '@/app/_lib/supabase-helpers'
 import type { Channel } from '@/types/database'
 
 interface CreateChannelProps {
   name: string
-  description?: string
 }
 
 interface UpdateChannelProps {
-  channelId: string
-  name?: string
-  description?: string
+  channelId: number
+  name: string
 }
 
 interface DeleteChannelProps {
-  channelId: string
+  channelId: number
 }
 
-export async function createChannel({ name, description }: CreateChannelProps) {
+export async function createChannel({ name }: CreateChannelProps) {
   const user = await requireAuth({ throwOnMissingProfile: true })
-
   const slug = name.toLowerCase().replace(/\s+/g, '-')
 
   await insertRecord<Channel>({
     table: 'channels',
     data: {
       slug,
-      created_by: user.id
+      created_by: user.id,
+      inserted_at: new Date().toISOString()
     },
     options: {
-      revalidatePath: '/channels/[id]'
+      revalidatePath: '/channel/[id]',
+      errorMap: {
+        NOT_FOUND: {
+          message: 'Failed to create channel',
+          status: 500
+        }
+      }
     }
   })
 }
 
-export async function updateChannel({ channelId, name, description }: UpdateChannelProps) {
+export async function updateChannel({ channelId, name }: UpdateChannelProps) {
   await requireAuth({ throwOnMissingProfile: true })
-
-  const updates: Partial<Channel> = {}
-  if (name) {
-    updates.slug = name.toLowerCase().replace(/\s+/g, '-')
-  }
 
   await updateRecord<Channel>({
     table: 'channels',
-    data: updates,
-    match: {
-      channel_id: parseInt(channelId)
+    data: {
+      slug: name.toLowerCase().replace(/\s+/g, '-')
     },
+    match: { id: channelId },
     options: {
-      revalidatePath: '/channels/[id]'
+      revalidatePath: '/channel/[id]',
+      errorMap: {
+        NOT_FOUND: {
+          message: 'Channel not found',
+          status: 404
+        }
+      }
     }
   })
 }
@@ -63,11 +68,15 @@ export async function deleteChannel({ channelId }: DeleteChannelProps) {
 
   await deleteRecord<Channel>({
     table: 'channels',
-    match: {
-      channel_id: parseInt(channelId)
-    },
+    match: { id: channelId },
     options: {
-      revalidatePath: '/channels/[id]'
+      revalidatePath: '/channel/[id]',
+      errorMap: {
+        NOT_FOUND: {
+          message: 'Channel not found',
+          status: 404
+        }
+      }
     }
   })
 }
@@ -76,40 +85,70 @@ export async function ensureDefaultChannels() {
   const user = await requireAuth({ throwOnMissingProfile: true })
   const supabase = await createClient()
 
-  // Create general channel if it doesn't exist
-  const { count: generalExists } = await supabase
-    .from('channels')
-    .select('*', { count: 'exact', head: true })
-    .eq('slug', 'general')
+  // Check for general channel
+  const generalChannel = await selectRecords<Channel>({
+    table: 'channels',
+    match: { slug: 'general' },
+    options: {
+      errorMap: {
+        NOT_FOUND: {
+          message: 'General channel not found',
+          status: 404
+        }
+      }
+    }
+  }).catch(() => null)
 
-  if (!generalExists) {
+  if (!generalChannel) {
     await insertRecord<Channel>({
       table: 'channels',
       data: {
         slug: 'general',
-        created_by: user.id
+        created_by: user.id,
+        inserted_at: new Date().toISOString()
       },
       options: {
-        revalidatePath: '/channels/[id]'
+        revalidatePath: '/channel/[id]',
+        errorMap: {
+          NOT_FOUND: {
+            message: 'Failed to create general channel',
+            status: 500
+          }
+        }
       }
     })
   }
 
-  // Create random channel if it doesn't exist
-  const { count: randomExists } = await supabase
-    .from('channels')
-    .select('*', { count: 'exact', head: true })
-    .eq('slug', 'random')
+  // Check for random channel
+  const randomChannel = await selectRecords<Channel>({
+    table: 'channels',
+    match: { slug: 'random' },
+    options: {
+      errorMap: {
+        NOT_FOUND: {
+          message: 'Random channel not found',
+          status: 404
+        }
+      }
+    }
+  }).catch(() => null)
 
-  if (!randomExists) {
+  if (!randomChannel) {
     await insertRecord<Channel>({
       table: 'channels',
       data: {
         slug: 'random',
-        created_by: user.id
+        created_by: user.id,
+        inserted_at: new Date().toISOString()
       },
       options: {
-        revalidatePath: '/channels/[id]'
+        revalidatePath: '/channel/[id]',
+        errorMap: {
+          NOT_FOUND: {
+            message: 'Failed to create random channel',
+            status: 500
+          }
+        }
       }
     })
   }

@@ -1,113 +1,134 @@
 -- Reset tables
-TRUNCATE TABLE public.users CASCADE;
-TRUNCATE TABLE auth.users CASCADE;
+truncate table public.users cascade;
+truncate table auth.users cascade;
+truncate table public.user_roles cascade;
+truncate table public.role_permissions cascade;
 
--- Create test users in auth.users
-INSERT INTO auth.users (
-  id,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_user_meta_data,
-  raw_app_meta_data,
-  aud,
-  role
-) VALUES
-  (
-    'd0d54e51-06b2-4570-8f38-67d0e9c0f718',
-    'admin@example.com',
-    crypt('password123', gen_salt('bf')),
-    now(),
-    '{"provider":"email"}',
-    '{"provider":"email","providers":["email"]}',
-    'authenticated',
-    'authenticated'
-  ),
-  (
-    'c9c9e15e-df4a-4e61-aca7-d93a3c0a1d31',
-    'mod@example.com',
-    crypt('password123', gen_salt('bf')),
-    now(),
-    '{"provider":"email"}',
-    '{"provider":"email","providers":["email"]}',
-    'authenticated',
-    'authenticated'
-  ),
-  (
-    'e19c50e6-2f70-4d2a-b205-697e5e3507ee',
-    'user1@example.com',
-    crypt('password123', gen_salt('bf')),
-    now(),
-    '{"provider":"email"}',
-    '{"provider":"email","providers":["email"]}',
-    'authenticated',
-    'authenticated'
-  ),
-  (
-    '8f9c61e3-69e4-4359-9eef-84c4f6800525',
-    'user2@example.com',
-    crypt('password123', gen_salt('bf')),
-    now(),
-    '{"provider":"email"}',
-    '{"provider":"email","providers":["email"]}',
-    'authenticated',
-    'authenticated'
-  );
+-- Seed initial admin user
+insert into auth.users (id, email)
+values 
+  ('d0fc7e7c-8e3a-4195-84f5-fce375b2a76d', 'admin@example.com');
 
+-- Seed some test users
+insert into auth.users (id, email)
+values
+  ('b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f', 'alice@example.com'),
+  ('c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e', 'bob@example.com'),
+  ('d7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f', 'charlie@example.com');
 
+-- Update user profiles with additional information
+update public.users 
+set 
+  username = case id
+    when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'admin'
+    when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'alice'
+    when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'bob'
+    when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'charlie'
+  end,
+  bio = case id
+    when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'System Administrator'
+    when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'Software Engineer'
+    when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'Product Manager'
+    when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'UX Designer'
+  end,
+  profile_picture_url = case id
+    when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'https://example.com/avatars/admin.jpg'
+    when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'https://example.com/avatars/alice.jpg'
+    when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'https://example.com/avatars/bob.jpg'
+    when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'https://example.com/avatars/charlie.jpg'
+  end
+where id in (
+  'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d',
+  'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f',
+  'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e',
+  'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f'
+);
 
--- Reset sequences
-SELECT setval('public.channels_channel_id_seq', (SELECT MAX(channel_id) FROM public.channels));
-SELECT setval('public.channel_messages_message_id_seq', (SELECT MAX(message_id) FROM public.channel_messages));
-SELECT setval('public.direct_messages_message_id_seq', (SELECT MAX(message_id) FROM public.direct_messages));
-SELECT setval('public.thread_messages_message_id_seq', (SELECT MAX(message_id) FROM public.thread_messages));
--- Create channels
-INSERT INTO public.channels (channel_id, slug, created_by)
-VALUES
-  (1, 'general', 'd0d54e51-06b2-4570-8f38-67d0e9c0f718'),
-  (2, 'random', 'd0d54e51-06b2-4570-8f38-67d0e9c0f718'),
-  (3, 'help', 'c9c9e15e-df4a-4e61-aca7-d93a3c0a1d31');
+-- Seed additional roles (handle_new_user trigger already sets admin for first user)
+insert into public.user_roles (user_id, role)
+select 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f', 'moderator'
+where not exists (
+  select 1 from public.user_roles
+  where user_id = 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f'
+  and role = 'moderator'
+);
 
--- Add some channel messages
-INSERT INTO public.channel_messages (message_id, message, channel_id, user_id)
-VALUES
-  (1, 'Welcome to the general channel! 👋', 1, 'd0d54e51-06b2-4570-8f38-67d0e9c0f718'),
-  (2, 'Thanks! Happy to be here', 1, 'e19c50e6-2f70-4d2a-b205-697e5e3507ee'),
-  (3, 'Hello everyone!', 1, '8f9c61e3-69e4-4359-9eef-84c4f6800525');
-
--- Add some direct messages
-INSERT INTO public.direct_messages (message_id, message, sender_id, receiver_id)
-VALUES
-  (1, 'Hey Alice, how are you?', '8f9c61e3-69e4-4359-9eef-84c4f6800525', 'e19c50e6-2f70-4d2a-b205-697e5e3507ee'),
-  (2, 'Hi Bob! I''m good, thanks for asking!', 'e19c50e6-2f70-4d2a-b205-697e5e3507ee', '8f9c61e3-69e4-4359-9eef-84c4f6800525');
-
--- Add some thread messages
-INSERT INTO public.thread_messages (message_id, message, user_id, parent_id, parent_type)
-VALUES
-  (1, 'Great to see you all!', 'c9c9e15e-df4a-4e61-aca7-d93a3c0a1d31', 1, 'channel_message'),
-  (2, 'Thanks mod!', 'e19c50e6-2f70-4d2a-b205-697e5e3507ee', 1, 'channel_message');
-
--- Add some emoji reactions
-INSERT INTO public.emoji_reactions (user_id, parent_id, parent_type, emoji)
-VALUES
-  ('e19c50e6-2f70-4d2a-b205-697e5e3507ee', 1, 'channel_message', '👋'),
-  ('8f9c61e3-69e4-4359-9eef-84c4f6800525', 1, 'channel_message', '❤️');
-
--- Add some message mentions
-INSERT INTO public.message_mentions (parent_id, parent_type, mentioned_user_id)
-VALUES
-  (2, 'channel_message', 'd0d54e51-06b2-4570-8f38-67d0e9c0f718'),
-  (1, 'direct_message', 'e19c50e6-2f70-4d2a-b205-697e5e3507ee');
-
--- Add role permissions
-INSERT INTO public.role_permissions (role, permission)
-VALUES
+-- Seed role permissions
+insert into public.role_permissions (role, permission)
+values
   ('admin', 'channels.delete'),
   ('admin', 'messages.delete'),
   ('moderator', 'messages.delete');
 
+-- Seed channels
+insert into public.channels (id, slug, created_by)
+values
+  (1, 'general', 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d'),
+  (2, 'random', 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d'),
+  (3, 'development', 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f');
+
 -- Reset sequences
-SELECT setval('public.channels_channel_id_seq', (SELECT MAX(channel_id) FROM public.channels));
-SELECT setval('public.channel_messages_message_id_seq', (SELECT MAX(message_id) FROM public.channel_messages));
-SELECT setval('public.direct_messages_message_id_seq', (SELECT MAX(message_id) FROM public.direct_messages));
-SELECT setval('public.thread_messages_message_id_seq', (SELECT MAX(message_id) FROM public.thread_messages));
+select setval('public.channels_id_seq', (select max(id) from public.channels));
+
+-- Seed some channel messages
+insert into public.messages (message, message_type, user_id, channel_id)
+values
+  ('Welcome to the general channel!', 'channel', 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d', 1),
+  ('Hey everyone!', 'channel', 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f', 1),
+  ('Anyone up for lunch?', 'channel', 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e', 2),
+  ('New project kickoff tomorrow!', 'channel', 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f', 3);
+
+-- Seed some direct messages
+insert into public.messages (message, message_type, user_id, receiver_id)
+values
+  ('Hey Alice, got a minute?', 'direct', 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e', 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f'),
+  ('Sure Bob, what''s up?', 'direct', 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f', 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e');
+
+-- Get the IDs of the first messages for threading
+do $$
+declare
+  welcome_message_id bigint;
+begin
+  select id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
+
+  -- Seed some thread messages
+  insert into public.messages (message, message_type, user_id, parent_message_id)
+  values
+    ('Great to be here!', 'thread', 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e', welcome_message_id),
+    ('Looking forward to collaborating!', 'thread', 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f', welcome_message_id);
+end $$;
+
+-- Reset message sequence
+select setval('public.messages_id_seq', (select max(id) from public.messages));
+
+-- Seed reactions, mentions, and files
+do $$
+declare
+  welcome_message_id bigint;
+  hey_everyone_id bigint;
+  lunch_message_id bigint;
+  kickoff_message_id bigint;
+begin
+  select id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
+  select id into hey_everyone_id from public.messages where message = 'Hey everyone!';
+  select id into lunch_message_id from public.messages where message = 'Anyone up for lunch?';
+  select id into kickoff_message_id from public.messages where message = 'New project kickoff tomorrow!';
+
+  -- Seed reactions
+  insert into public.message_reactions (message_id, user_id, emoji)
+  values
+    (welcome_message_id, 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f', '👋'),
+    (welcome_message_id, 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e', '❤️'),
+    (hey_everyone_id, 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f', '👍');
+
+  -- Seed mentions
+  insert into public.message_mentions (message_id, mentioned_user_id)
+  values
+    (hey_everyone_id, 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e'),
+    (lunch_message_id, 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f');
+
+  -- Seed file attachments
+  insert into public.message_files (message_id, file_type, file_url)
+  values
+    (kickoff_message_id, 'document', 'https://example.com/files/project-kickoff.pdf');
+end $$;

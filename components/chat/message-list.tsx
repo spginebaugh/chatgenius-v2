@@ -4,106 +4,116 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { SmileIcon } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
+import type { DbMessage, MessageFile, MessageReaction } from "@/types/database"
+import type { UiMessage } from "@/types/messages-ui"
+
+interface DisplayMessage extends UiMessage {
+  files?: MessageFile[]
+}
 
 interface MessageListProps {
-  messages: Array<{
-    id: string
-    message: string
-    inserted_at: string
-    profiles: {
-      id: string
-      username: string
-    }
-    files?: Array<{
-      url: string
-      type: string
-      name: string
-    }>
-    thread_messages?: Array<{
-      id: string
-      message: string
-      inserted_at: string
-      profiles: {
-        id: string
-        username: string
-      }
-    }>
-    reactions?: Array<{
-      emoji: string
-      count: number
-      reacted_by_me: boolean
-    }>
-  }>
-  onThreadClick?: (message: MessageListProps["messages"][0]) => void
-  onEmojiSelect?: (messageId: string, emoji: string, parent_type: 'channel_message' | 'direct_message' | 'thread_message') => void
-  viewType: 'channel' | 'dm'
+  messages: DisplayMessage[]
+  onThreadClick?: (message: DisplayMessage) => void
+  onEmojiSelect?: (messageId: number, emoji: string) => void
 }
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🤔", "👀"]
 
-export function MessageList({ messages, onThreadClick, onEmojiSelect, viewType }: MessageListProps) {
-  const handleEmojiSelect = (messageId: string, emoji: string) => {
-    onEmojiSelect?.(
-      messageId, 
-      emoji, 
-      viewType === 'channel' ? 'channel_message' : 'direct_message'
-    )
-  }
+const MessageFiles = ({ files }: { files?: MessageFile[] }) => (
+  <>
+    {files && files.length > 0 && (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {files.map((file, index) => (
+          file.file_type === 'image' && (
+            <a 
+              key={index} 
+              href={file.file_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <img 
+                src={file.file_url} 
+                alt="Attached image"
+                className="max-h-60 rounded-lg object-cover shadow-sm hover:shadow-md transition-shadow"
+              />
+            </a>
+          )
+        ))}
+      </div>
+    )}
+  </>
+)
 
+export function MessageList({ messages, onThreadClick, onEmojiSelect }: MessageListProps) {
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      {messages?.map((message) => (
-        <div key={message.id} className="flex items-start gap-3 hover:bg-gray-50 px-2 py-1 rounded group">
+      {messages.map((message) => (
+        <div key={message.id} className="flex items-start gap-3 group">
           <div className="w-9 h-9 rounded bg-[#BF5700] text-white flex items-center justify-center uppercase font-medium">
             {message.profiles?.username?.charAt(0) || '?'}
           </div>
-          <div className="flex-1 relative">
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="font-bold text-gray-900 text-base">
-                {message.profiles?.username || 'Unknown User'}
-              </span>
-              <span className="text-xs text-gray-500">
-                {new Date(message.inserted_at).toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit',
-                  hour12: true 
-                })}
-              </span>
+          <div className="flex-1">
+            <div className="flex items-baseline justify-between mb-1">
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-gray-900 text-base">
+                  {message.profiles?.username || 'Unknown User'}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {new Date(message.inserted_at).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  className="text-sm text-gray-500 hover:text-gray-700 bg-white h-8 px-2 rounded border border-gray-200 shadow-sm"
+                  onClick={() => onThreadClick?.(message)}
+                >
+                  {message.thread_count > 0 ? `${message.thread_count} ${message.thread_count === 1 ? 'reply' : 'replies'}` : 'Reply'}
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="text-sm text-gray-500 hover:text-gray-700 bg-white h-8 px-2 rounded border border-gray-200 shadow-sm"
+                    >
+                      <SmileIcon className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      {EMOJI_LIST.map((emoji) => (
+                        <Button
+                          key={emoji}
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => onEmojiSelect?.(message.id, emoji)}
+                        >
+                          {emoji}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
             <div className="text-gray-700 text-sm prose prose-sm max-w-none">
               <ReactMarkdown>{message.message}</ReactMarkdown>
             </div>
-
-            {/* Attached Images */}
-            {message.files && message.files.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {message.files.map((file, index) => (
-                  file.type.startsWith('image/') && (
-                    <a 
-                      key={index} 
-                      href={file.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <img 
-                        src={file.url} 
-                        alt={file.name}
-                        className="max-h-60 rounded-lg object-cover shadow-sm hover:shadow-md transition-shadow"
-                      />
-                    </a>
-                  )
-                ))}
-              </div>
-            )}
-            
+            <MessageFiles files={message.files} />
             {/* Emoji Reactions */}
             {message.reactions && message.reactions.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {message.reactions.map((reaction) => (
                   <button
                     key={reaction.emoji}
-                    onClick={() => handleEmojiSelect(message.id, reaction.emoji)}
+                    onClick={() => onEmojiSelect?.(message.id, reaction.emoji)}
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                       reaction.reacted_by_me 
                         ? 'bg-gray-100 border-gray-300' 
@@ -111,45 +121,11 @@ export function MessageList({ messages, onThreadClick, onEmojiSelect, viewType }
                     }`}
                   >
                     <span>{reaction.emoji}</span>
-                    <span className="text-gray-500">{reaction.count}</span>
+                    <span>{reaction.count}</span>
                   </button>
                 ))}
               </div>
             )}
-
-            <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    className="text-sm text-gray-500 hover:text-gray-700 bg-white h-8 px-2 rounded border border-gray-200 shadow-sm"
-                    variant="ghost"
-                    size="sm"
-                  >
-                    <SmileIcon className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-2">
-                  <div className="grid grid-cols-4 gap-2">
-                    {EMOJI_LIST.map((emoji) => (
-                      <Button
-                        key={emoji}
-                        variant="ghost"
-                        className="h-8 px-2"
-                        onClick={() => handleEmojiSelect(message.id, emoji)}
-                      >
-                        {emoji}
-                      </Button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <button 
-                onClick={() => onThreadClick?.(message)}
-                className="text-sm text-gray-500 hover:text-gray-700 bg-white px-3 py-1 rounded border border-gray-200 shadow-sm"
-              >
-                Reply to thread
-              </button>
-            </div>
           </div>
         </div>
       ))}

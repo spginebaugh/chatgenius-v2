@@ -13,7 +13,7 @@ values
   ('It was awesome!');
 `.trim();
 
-const server = `import { createClient } from '@/utils/supabase/server'
+const server = `import { createClient } from '@/app/_lib/supabase/server'
 
 export default async function Page() {
   const supabase = createClient()

@@ -1,6 +1,6 @@
-import { createClient } from '@/utils/supabase/server'
-import { FetchError } from '@/lib/fetching/helpers'
-import type { User } from '@/types/database'
+import { createClient } from '@/app/_lib/supabase-server'
+import { FetchError } from '@/app/_lib/fetch-helpers'
+import type { User } from '@supabase/supabase-js'
 
 interface RequireAuthOptions {
   throwOnMissingProfile?: boolean
@@ -11,52 +11,35 @@ interface GetOptionalUserOptions {
 }
 
 interface CheckPermissionProps {
-  resourceType: 'channel' | 'message' | 'thread'
-  resourceId: string
-  requiredRole?: 'owner' | 'member' | 'admin'
+  resourceType: 'channel' | 'message'
+  resourceId: string | number
+  requiredRole?: 'admin' | 'moderator'
 }
 
 /**
  * Get the authenticated user or throw an error if not authenticated
  */
-export async function requireAuth({ 
-  throwOnMissingProfile = true 
-}: RequireAuthOptions = {}): Promise<User> {
+export async function requireAuth({ throwOnMissingProfile = false } = {}): Promise<User> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
-  if (authError) {
-    throw new FetchError(
-      'Authentication failed',
-      'AUTH_ERROR',
-      401
-    )
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    throw new FetchError('Authentication required', 'AUTH_REQUIRED', 401)
   }
 
-  if (!user) {
-    throw new FetchError(
-      'Authentication required',
-      'AUTH_REQUIRED',
-      401
-    )
+  if (throwOnMissingProfile) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) {
+      throw new FetchError('User profile not found', 'PROFILE_NOT_FOUND', 404)
+    }
   }
 
-  // Get the full user profile
-  const { data: profile, error: profileError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || (!profile && throwOnMissingProfile)) {
-    throw new FetchError(
-      'Failed to fetch user profile',
-      'PROFILE_ERROR',
-      500
-    )
-  }
-
-  return profile
+  return user
 }
 
 /**
@@ -81,10 +64,21 @@ export async function getOptionalUser({
 export async function checkPermission({ 
   resourceType,
   resourceId,
-  requiredRole = 'owner'
+  requiredRole = 'admin'
 }: CheckPermissionProps): Promise<boolean> {
   const user = await requireAuth()
-  const supabase = await createClient()
+  const supabase = createClient()
+
+  // First check if user has the required role
+  const { data: userRole } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .single()
+
+  if (!userRole || userRole.role !== requiredRole) {
+    return false
+  }
 
   switch (resourceType) {
     case 'channel': {
@@ -99,17 +93,7 @@ export async function checkPermission({
 
     case 'message': {
       const { data } = await supabase
-        .from('channel_messages')
-        .select('user_id')
-        .eq('id', resourceId)
-        .single()
-      
-      return data?.user_id === user.id
-    }
-
-    case 'thread': {
-      const { data } = await supabase
-        .from('thread_messages')
+        .from('messages')
         .select('user_id')
         .eq('id', resourceId)
         .single()
@@ -120,4 +104,15 @@ export async function checkPermission({
     default:
       return false
   }
+}
+
+export async function checkAuth(): Promise<User> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    throw new FetchError('Authentication required', 'AUTH_REQUIRED', 401)
+  }
+  
+  return user
 } 

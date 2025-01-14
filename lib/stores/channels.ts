@@ -4,19 +4,19 @@ import { createStore } from './config'
 import { Channel } from '@/types/database'
 
 interface ChannelsState {
-  channels: Record<string, Channel>
-  activeChannelId: string | null
-  unreadCounts: Record<string, number>
+  channels: Record<number, Channel>
+  activeChannelId: number | null
+  unreadCounts: Record<number, number>
   isLoading: boolean
   error: string | null
 
   // Actions
   setChannels: (channels: Channel[]) => void
-  setActiveChannel: (channelId: string | null) => void
-  updateUnreadCount: (channelId: string, count: number) => void
+  setActiveChannel: (channelId: number | null) => void
+  updateUnreadCount: (channelId: number, count: number) => void
   addChannel: (channel: Channel) => void
-  updateChannel: (channelId: string, updates: Partial<Channel>) => void
-  removeChannel: (channelId: string) => void
+  updateChannel: (channelId: number, updates: Partial<Channel>) => void
+  removeChannel: (channelId: number) => void
   setError: (error: string | null) => void
   setLoading: (isLoading: boolean) => void
   reset: () => void
@@ -37,9 +37,9 @@ export const useChannelsStore = createStore<ChannelsState>({
   setChannels: (channels) =>
     useChannelsStore.setState(state => ({
       channels: channels.reduce((acc, channel) => {
-        acc[channel.channel_id.toString()] = channel
+        acc[channel.id] = channel
         return acc
-      }, {} as Record<string, Channel>)
+      }, {} as Record<number, Channel>)
     })),
 
   // Set active channel
@@ -60,7 +60,7 @@ export const useChannelsStore = createStore<ChannelsState>({
     useChannelsStore.setState(state => ({
       channels: {
         ...state.channels,
-        [channel.channel_id.toString()]: channel
+        [channel.id]: channel
       }
     })),
 

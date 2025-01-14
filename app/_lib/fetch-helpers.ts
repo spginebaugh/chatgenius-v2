@@ -1,4 +1,5 @@
-import { createClient } from "@/utils/supabase/server"
+import { createClient } from '@/app/_lib/supabase-server'
+import { DbMessage as Message, MessageType } from '@/types/database'
 
 export class FetchError extends Error {
   constructor(
@@ -123,4 +124,64 @@ export async function parallelQueries<T extends Record<string, () => Promise<any
   )
   
   return Object.fromEntries(results) as any
+}
+
+// Message-specific helpers
+export function getMessageSelect(includeThreads: boolean = false) {
+  return `
+    *,
+    user:users(*),
+    reactions:message_reactions(
+      *,
+      user:users(*)
+    ),
+    files:message_files(*),
+    mentions:message_mentions(
+      *,
+      mentioned_user:users(*)
+    )
+    ${includeThreads ? `,
+    thread_messages:messages(
+      *,
+      user:users(*)
+    )` : ''}
+  `
+}
+
+export function validateMessageType(type: MessageType, data: Partial<Message>) {
+  switch (type) {
+    case 'channel':
+      if (!data.channel_id) {
+        throw new FetchError(
+          'Channel messages require a channel_id',
+          'INVALID_MESSAGE',
+          400
+        )
+      }
+      break
+    case 'direct':
+      if (!data.receiver_id) {
+        throw new FetchError(
+          'Direct messages require a receiver_id',
+          'INVALID_MESSAGE',
+          400
+        )
+      }
+      break
+    case 'thread':
+      if (!data.parent_message_id) {
+        throw new FetchError(
+          'Thread messages require a parent_message_id',
+          'INVALID_MESSAGE',
+          400
+        )
+      }
+      break
+    default:
+      throw new FetchError(
+        'Invalid message type',
+        'INVALID_MESSAGE',
+        400
+      )
+  }
 } 

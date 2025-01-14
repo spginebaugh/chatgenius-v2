@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { updateUsername } from "@/app/actions/profile"
 import { toast } from "sonner"
+import type { User } from "@/types/database"
 
 interface ProfileSettingsPanelProps {
-  currentUsername: string
+  currentUsername: string | null
   onClose: () => void
 }
 
@@ -15,18 +16,22 @@ export function ProfileSettingsPanel({
   currentUsername,
   onClose,
 }: ProfileSettingsPanelProps) {
-  const [username, setUsername] = useState(currentUsername)
+  const [username, setUsername] = useState(currentUsername || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (username === currentUsername) return
+    if (username === currentUsername || !username.trim()) return
 
     setIsSubmitting(true)
     try {
-      await updateUsername({ username })
-      toast.success("Username updated successfully")
-      onClose()
+      const result = await updateUsername({ username: username.trim() })
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Username updated successfully")
+        onClose()
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update username")
     } finally {
@@ -62,12 +67,15 @@ export function ProfileSettingsPanel({
               minLength={3}
               maxLength={30}
             />
+            <p className="mt-1 text-sm text-gray-500">
+              Username must be between 3 and 30 characters and can only contain letters, numbers, underscores, and hyphens.
+            </p>
           </div>
 
           <Button 
             type="submit" 
             className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white"
-            disabled={username === currentUsername || isSubmitting}
+            disabled={username === currentUsername || !username.trim() || isSubmitting}
           >
             {isSubmitting ? "Updating..." : "Update Username"}
           </Button>

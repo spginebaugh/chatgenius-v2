@@ -1,82 +1,71 @@
+export type MessageType = 'channel' | 'direct' | 'thread'
+export type UserStatus = 'ONLINE' | 'OFFLINE'
+export type FileType = 'image' | 'video' | 'audio' | 'document'
+export type AppRole = 'admin' | 'moderator'
+export type AppPermission = 'channels.delete' | 'messages.delete'
+
 export interface User {
   id: string
   username: string | null
   bio: string | null
   profile_picture_url: string | null
   last_active_at: string | null
-  status: 'ONLINE' | 'OFFLINE'
+  status: UserStatus
   inserted_at: string
 }
 
 export interface Channel {
-  channel_id: number
+  id: number
   slug: string
   created_by: string
   inserted_at: string
 }
 
-export interface ChannelMessage {
-  message_id: number
+export interface DbMessage {
+  id: number
   message: string | null
-  channel_id: number
+  message_type: MessageType
   user_id: string
+  channel_id: number | null
+  receiver_id: string | null
+  parent_message_id: number | null
+  thread_count: number
   inserted_at: string
 }
 
-export interface DirectMessage {
+export interface MessageFile {
+  id: number
   message_id: number
-  message: string | null
-  sender_id: string
-  receiver_id: string
-  inserted_at: string
-}
-
-export interface ThreadMessage {
-  message_id: number
-  message: string | null
-  user_id: string
-  parent_id: number
-  parent_type: 'channel_message' | 'direct_message'
-  inserted_at: string
-}
-
-export interface EmojiReaction {
-  reaction_id: number
-  user_id: string
-  parent_id: number
-  parent_type: 'channel_message' | 'direct_message' | 'thread_message'
-  emoji: string
-  inserted_at: string
-}
-
-export interface File {
-  file_id: number
-  user_id: string
-  parent_id: number
-  parent_type: 'channel_message' | 'direct_message' | 'thread_message'
-  file_type: 'image' | 'video' | 'audio' | 'document'
+  file_type: FileType
   file_url: string
   inserted_at: string
 }
 
 export interface MessageMention {
-  mention_id: number
-  parent_id: number
-  parent_type: 'channel_message' | 'direct_message' | 'thread_message'
+  id: number
+  message_id: number
   mentioned_user_id: string
   inserted_at: string
 }
 
-export interface UserRole {
-  role_assignment_id: number
+export interface MessageReaction {
+  id: number
+  message_id: number
   user_id: string
-  role: 'admin' | 'moderator'
+  emoji: string
+  inserted_at: string
+}
+
+export interface UserRole {
+  id: number
+  user_id: string
+  role: AppRole
   inserted_at: string
 }
 
 export interface RolePermission {
-  permission_assignment_id: number
-  role: 'admin' | 'moderator'
-  permission: 'channels.delete' | 'messages.delete'
+  id: number
+  role: AppRole
+  permission: AppPermission
   inserted_at: string
 }

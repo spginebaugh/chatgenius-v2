@@ -1,7 +1,7 @@
-import { createClient } from "@/utils/supabase/server";
-import { insertRecord, selectRecords } from '@/lib/utils/supabase-helpers';
+import { createClient } from "@/app/_lib/supabase-server";
+import { insertRecord, selectRecords } from '@/app/_lib/supabase-helpers';
 import { NextResponse } from "next/server";
-import type { User } from '@/types/database';
+import type { User, Channel } from '@/types/database';
 
 export async function GET(request: Request) {
   // The `/auth/callback` route is required for the server-side auth flow implemented
@@ -31,7 +31,9 @@ export async function GET(request: Request) {
         if (error instanceof Error && error.message.includes('Not found')) {
           const newUser = {
             id: user.id,
-            username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`
+            username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`,
+            status: 'OFFLINE' as const,
+            inserted_at: new Date().toISOString()
           };
           console.log('Creating user:', newUser);
           
@@ -53,9 +55,17 @@ export async function GET(request: Request) {
   }
 
   // Get the first available channel or default to channel 1
-  const supabase = await createClient();
-  const { data: channels } = await supabase.from('channels').select('channel_id').limit(1);
-  const channelId = channels?.[0]?.channel_id || '1';
+  const channels = await selectRecords<Channel>({
+    table: 'channels',
+    select: 'id',
+    options: {
+      errorMap: {
+        NOT_FOUND: { message: 'No channels found', status: 404 }
+      }
+    }
+  });
+
+  const channelId = channels?.[0]?.id || 1;
 
   // Redirect to the first channel after authentication
   return NextResponse.redirect(`${origin}/channel/${channelId}`);

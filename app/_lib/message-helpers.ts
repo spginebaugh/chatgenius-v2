@@ -1,6 +1,6 @@
-import { ChannelMessage, DirectMessage, ThreadMessage, File, EmojiReaction } from '@/types/database'
+import { DbMessage as Message, MessageFile, MessageType } from '@/types/database'
 import { insertRecord } from './supabase-helpers'
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/app/_lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 
 export interface FileAttachment {
@@ -16,13 +16,12 @@ interface MessageBase {
 
 interface HandleFileAttachmentsProps {
   messageId: number
-  messageType: 'channel_message' | 'direct_message' | 'thread_message'
   files: FileAttachment[]
   userId: string
 }
 
 interface SendChannelMessageProps extends MessageBase {
-  channelId: string
+  channelId: number
   userId: string
 }
 
@@ -33,22 +32,19 @@ interface SendDirectMessageProps extends MessageBase {
 
 interface SendThreadMessageProps extends MessageBase {
   parentId: number
-  parentType: 'channel_message' | 'direct_message'
   userId: string
 }
 
 interface FormatMessageProps {
-  message: ChannelMessage | DirectMessage | ThreadMessage
+  message: Message
 }
 
 interface FormatReactionsProps {
   reactions: Array<{
     emoji: string
     user_id: string
-    parent_type: 'channel_message' | 'direct_message' | 'thread_message'
   }>
   currentUserId: string
-  expectedParentType: 'channel_message' | 'direct_message' | 'thread_message'
 }
 
 /**
@@ -56,22 +52,19 @@ interface FormatReactionsProps {
  */
 async function handleFileAttachments({
   messageId,
-  messageType,
   files,
   userId
 }: HandleFileAttachmentsProps) {
   const fileRecords = files.map(file => ({
     message_id: messageId,
-    message_type: messageType,
-    url: file.url,
+    file_url: file.url,
     file_type: 'document' as const,
-    file_name: file.name,
-    user_id: userId
+    inserted_at: new Date().toISOString()
   }))
 
   // Insert first file using our helper
-  await insertRecord<File>({
-    table: 'files',
+  await insertRecord<MessageFile>({
+    table: 'message_files',
     data: fileRecords[0],
     options: {
       revalidatePath: '/channel/[id]'
@@ -81,7 +74,7 @@ async function handleFileAttachments({
   // Insert remaining files if any
   if (fileRecords.length > 1) {
     const supabase = await createClient()
-    const { error } = await supabase.from('files').insert(fileRecords.slice(1))
+    const { error } = await supabase.from('message_files').insert(fileRecords.slice(1))
     if (error) throw error
   }
 }
@@ -96,14 +89,16 @@ export async function sendChannelMessage({
   userId
 }: SendChannelMessageProps) {
   // Insert the message
-  const messageData = await insertRecord<ChannelMessage>({
-    table: 'channel_messages',
+  const messageData = await insertRecord<Message>({
+    table: 'messages',
     data: {
-      channel_id: parseInt(channelId),
+      channel_id: channelId,
       user_id: userId,
-      message
+      message,
+      message_type: 'channel' as MessageType,
+      inserted_at: new Date().toISOString()
     },
-    select: 'message_id',
+    select: 'id',
     options: {
       revalidatePath: '/channel/[id]'
     }
@@ -112,8 +107,7 @@ export async function sendChannelMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.message_id,
-      messageType: 'channel_message',
+      messageId: messageData.id,
       files,
       userId
     })
@@ -132,14 +126,16 @@ export async function sendDirectMessage({
   userId
 }: SendDirectMessageProps) {
   // Insert the message
-  const messageData = await insertRecord<DirectMessage>({
-    table: 'direct_messages',
+  const messageData = await insertRecord<Message>({
+    table: 'messages',
     data: {
-      sender_id: userId,
+      user_id: userId,
       receiver_id: receiverId,
-      message
+      message,
+      message_type: 'direct' as MessageType,
+      inserted_at: new Date().toISOString()
     },
-    select: 'message_id',
+    select: 'id',
     options: {
       revalidatePath: '/dm/[id]'
     }
@@ -148,8 +144,7 @@ export async function sendDirectMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.message_id,
-      messageType: 'direct_message',
+      messageId: messageData.id,
       files,
       userId
     })
@@ -163,22 +158,23 @@ export async function sendDirectMessage({
  */
 export async function sendThreadMessage({ 
   parentId,
-  parentType,
   message,
   files,
   userId
 }: SendThreadMessageProps) {
   // Insert the message
-  const messageData = await insertRecord<ThreadMessage>({
-    table: 'thread_messages',
+  const messageData = await insertRecord<Message>({
+    table: 'messages',
     data: {
-      parent_id: parentId,
-      parent_type: parentType,
+      parent_message_id: parentId,
       user_id: userId,
-      message
+      message,
+      message_type: 'thread' as MessageType,
+      inserted_at: new Date().toISOString()
     },
-    select: 'message_id',
+    select: 'id',
     options: {
+      // Revalidate the primary path
       revalidatePath: '/channel/[id]'
     }
   })
@@ -186,15 +182,17 @@ export async function sendThreadMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.message_id,
-      messageType: 'thread_message',
+      messageId: messageData.id,
       files,
       userId
     })
   }
 
-  // Revalidate both paths since threads can be in either channels or DMs
+  // Revalidate all paths that might display this thread message
+  revalidatePath('/channel/[id]')
   revalidatePath('/dm/[id]')
+  revalidatePath('/thread/[id]')
+  revalidatePath('/messages/[id]')  // If you have a dedicated message view
   
   return messageData
 }
@@ -205,14 +203,14 @@ export async function sendThreadMessage({
 export function formatMessageForDisplay({ message }: FormatMessageProps) {
   if (!message) {
     return {
-      id: '',
+      id: 0,
       message: '',
       inserted_at: new Date().toISOString(),
     }
   }
 
   return {
-    id: message.message_id?.toString() || '',
+    id: message.id || 0,
     message: message.message || '',
     inserted_at: message.inserted_at || new Date().toISOString(),
   }
@@ -221,18 +219,16 @@ export function formatMessageForDisplay({ message }: FormatMessageProps) {
 /**
  * Formats reactions for a message
  */
-export function formatReactions({ reactions, currentUserId, expectedParentType }: FormatReactionsProps) {
-  // Group reactions by emoji, but only for the expected parent type
+export function formatReactions({ reactions, currentUserId }: FormatReactionsProps) {
+  // Group reactions by emoji
   const reactionsByEmoji = new Map<string, Set<string>>()
   
-  reactions
-    .filter(reaction => reaction.parent_type === expectedParentType)
-    .forEach(reaction => {
-      if (!reactionsByEmoji.has(reaction.emoji)) {
-        reactionsByEmoji.set(reaction.emoji, new Set())
-      }
-      reactionsByEmoji.get(reaction.emoji)!.add(reaction.user_id)
-    })
+  reactions.forEach(reaction => {
+    if (!reactionsByEmoji.has(reaction.emoji)) {
+      reactionsByEmoji.set(reaction.emoji, new Set())
+    }
+    reactionsByEmoji.get(reaction.emoji)!.add(reaction.user_id)
+  })
 
   // Format reactions for display
   return Array.from(reactionsByEmoji.entries()).map(([emoji, users]) => ({

@@ -46,7 +46,7 @@ function ChannelList() {
 ### After
 ```typescript
 // New Server Component
-import { getChannels } from '@/lib/queries'
+import { getChannels } from '@/app/_lib'
 
 async function ChannelList() {
   const channels = await getChannels()

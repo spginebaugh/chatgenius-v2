@@ -16,23 +16,31 @@ import {
 } from "lucide-react"
 import ContentEditable, { ContentEditableEvent } from "react-contenteditable"
 import TurndownService from "turndown"
-import { createClient } from "@/utils/supabase/client"
+import { createClient } from "@/lib/supabase/client"
+import type { MessageFile } from "@/types/database"
+import { toast } from "sonner"
 
 const turndownService = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced'
 })
 
+interface FileAttachment {
+  url: string
+  type: 'image' | 'video' | 'audio' | 'document'
+  name: string
+}
+
 interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string, files?: Array<{ url: string, type: string, name: string }>) => Promise<void>
+  onSendMessage: (message: string, files?: FileAttachment[]) => Promise<void>
 }
 
 export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) {
   const [html, setHtml] = useState("")
   const [linkUrl, setLinkUrl] = useState("")
   const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ url: string, type: string, name: string }>>([])
+  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const contentEditableRef = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -45,9 +53,15 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
       const markdown = html.trim() ? turndownService.turndown(html) : ""
       
       if (markdown.trim() || uploadedFiles.length > 0) {
-        await onSendMessage(markdown, uploadedFiles)
-        setHtml("")
-        setUploadedFiles([])
+        try {
+          console.log('Sending message with files:', uploadedFiles)
+          await onSendMessage(markdown, uploadedFiles)
+          setHtml("")
+          setUploadedFiles([])
+        } catch (error) {
+          console.error("Error sending message:", error)
+          toast.error("Failed to send message. Please try again.")
+        }
       }
     }
   }
@@ -55,31 +69,44 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
   const handleFileUpload = async (files: FileList) => {
     setIsUploading(true)
     try {
-      const newFiles: Array<{ url: string, type: string, name: string }> = []
+      console.log('Starting file upload for files:', files)
+      const newFiles: FileAttachment[] = []
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         if (file.type.startsWith('image/')) {
+          console.log('Processing image file:', file.name)
           const fileName = `${Date.now()}-${file.name}`
           const { data, error } = await supabase.storage
             .from('chat-attachments')
             .upload(fileName, file)
 
-          if (error) throw error
+          if (error) {
+            console.error('Storage upload error:', error)
+            toast.error(`Failed to upload ${file.name}`)
+            throw error
+          }
+
+          console.log('File uploaded to storage:', data)
 
           const { data: { publicUrl } } = supabase.storage
             .from('chat-attachments')
             .getPublicUrl(fileName)
 
+          console.log('Public URL generated:', publicUrl)
+
           newFiles.push({
             url: publicUrl,
-            type: file.type,
+            type: 'image',
             name: file.name
           })
+          console.log('Added file to upload list:', newFiles[newFiles.length - 1])
         }
       }
+      console.log('Setting uploaded files:', newFiles)
       setUploadedFiles(prev => [...prev, ...newFiles])
     } catch (error) {
-      console.error('Error uploading file:', error)
+      console.error('Error in handleFileUpload:', error)
+      toast.error("Failed to upload one or more files")
     } finally {
       setIsUploading(false)
     }
@@ -118,7 +145,7 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
   }
 
   return (
-    <div className="px-4 py-3 bg-white border-t border-gray-200">
+    <div className="sticky bottom-0 px-4 py-3 bg-white border-t border-gray-200">
       <form onSubmit={handleSubmit}>
         <div className="space-y-2">
           {/* Formatting Toolbar */}

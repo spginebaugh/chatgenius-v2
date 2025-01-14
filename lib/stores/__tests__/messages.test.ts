@@ -1,11 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useMessagesStore } from '../messages'
-import { ReactionType } from '@/types/frontend'
+import { useMessagesStore, type Message, type MessageReactionDisplay } from '../messages'
+import type { MessageReaction } from '@/types/database'
 
 describe('useMessagesStore', () => {
-  const mockMessage = {
+  const mockMessage: Message = {
     id: '1',
     message: 'Test message',
+    message_type: 'channel',
+    user_id: 'user1',
+    channel_id: 1,
+    receiver_id: null,
+    parent_message_id: null,
+    thread_count: 0,
     inserted_at: new Date().toISOString(),
     profiles: {
       id: 'user1',
@@ -13,10 +19,12 @@ describe('useMessagesStore', () => {
     }
   }
 
-  const mockReaction: ReactionType = {
+  const mockReaction: MessageReaction = {
+    id: 1,
+    message_id: 1,
+    user_id: 'user1',
     emoji: '👍',
-    count: 1,
-    reacted_by_me: true
+    inserted_at: new Date().toISOString()
   }
 
   const channelKey = 'channel1'
@@ -65,10 +73,14 @@ describe('useMessagesStore', () => {
   it('should update message reactions', () => {
     const { setMessages, updateReactions } = useMessagesStore.getState()
     setMessages(channelKey, [mockMessage])
-    updateReactions(channelKey, mockMessage.id, [mockReaction], 'channel_message')
+    updateReactions(channelKey, mockMessage.id, [mockReaction])
     
     const messages = useMessagesStore.getState().messages[channelKey]
-    expect(messages[0].reactions).toEqual([mockReaction])
+    expect(messages[0].reactions).toEqual([{
+      emoji: '👍',
+      count: 1,
+      reacted_by_me: true
+    }])
   })
 
   it('should delete a message', () => {
