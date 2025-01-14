@@ -67,7 +67,7 @@ export async function checkPermission({
   requiredRole = 'admin'
 }: CheckPermissionProps): Promise<boolean> {
   const user = await requireAuth()
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // First check if user has the required role
   const { data: userRole } = await supabase
