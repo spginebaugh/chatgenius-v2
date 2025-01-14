@@ -66,7 +66,7 @@ function formatReactions(reactions: MessageReaction[] | null): DisplayMessage['r
 }
 
 export async function getChannelMessages(channelId: number): Promise<DisplayMessage[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: messages, error } = await supabase
     .from('messages')

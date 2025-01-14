@@ -73,7 +73,7 @@ export async function executeQuery<T>({
   errorMap = {},
   revalidatePath
 }: ExecuteQueryProps<T>): Promise<T> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     const { data, error } = await query(supabase)
@@ -267,7 +267,7 @@ export async function setupSubscription<T extends DbRecord>({
   onError = console.error,
   onPayload
 }: SetupSubscriptionProps<T>): Promise<RealtimeChannel> {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   return supabase
     .channel(`${table}-changes`)
