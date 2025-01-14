@@ -172,15 +172,14 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
     // Always process the message if it doesn't exist or if it's more recent
     if (!existingMessage || new Date(message.inserted_at) > new Date(existingMessage.inserted_at)) {
       const user = storeUsers.find(u => u.id === message.user_id)
-      const displayMessage: UiMessage = {
+      const displayMessage = {
         ...message,
         profiles: {
-          id: user?.id || message.user_id,
+          id: user?.id || '',
           username: user?.username || 'Unknown',
-          profile_picture_url: user?.profile_picture_url,
           status: user?.status
         },
-        files: message.files || [],
+        files: [],
         reactions: existingMessage?.reactions || []
       }
       addMessage(messageType, key, displayMessage)
