@@ -18,6 +18,11 @@ export default async function Signup(props: {
     );
   }
 
+  // Create a wrapper function that returns void
+  async function handleSignUp(formData: FormData) {
+    await signUpAction(formData);
+  }
+
   return (
     <div className="flex flex-col items-center justify-center w-full">
       <form className="w-full max-w-sm">
@@ -47,7 +52,7 @@ export default async function Signup(props: {
           </div>
 
           <SubmitButton 
-            formAction={signUpAction} 
+            formAction={handleSignUp} 
             pendingText="Signing up..."
             className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white mt-4"
           >

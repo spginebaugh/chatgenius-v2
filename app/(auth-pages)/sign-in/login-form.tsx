@@ -12,6 +12,10 @@ interface LoginFormProps {
 }
 
 export default function LoginForm({ message }: LoginFormProps) {
+  async function handleSignIn(formData: FormData) {
+    await signInAction(formData);
+  }
+
   return (
     <div className="flex flex-col items-center justify-center w-full">
       <form className="w-full max-w-sm">
@@ -41,7 +45,7 @@ export default function LoginForm({ message }: LoginFormProps) {
 
           <SubmitButton 
             pendingText="Signing In..." 
-            formAction={signInAction}
+            formAction={handleSignIn}
             className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white mt-4"
           >
             Sign In

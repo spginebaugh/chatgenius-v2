@@ -10,6 +10,12 @@ export default async function ForgotPassword(props: {
   searchParams: Promise<Message>;
 }) {
   const searchParams = await props.searchParams;
+
+  // Create a wrapper function that returns void
+  async function handleForgotPassword(formData: FormData) {
+    await forgotPasswordAction(formData);
+  }
+
   return (
     <div className="flex flex-col items-center justify-center w-full">
       <form className="w-full max-w-sm">
@@ -27,7 +33,7 @@ export default async function ForgotPassword(props: {
           </div>
 
           <SubmitButton 
-            formAction={forgotPasswordAction}
+            formAction={handleForgotPassword}
             className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white mt-4"
           >
             Reset Password
