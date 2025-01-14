@@ -4,6 +4,7 @@ import React, { useMemo } from "react"
 import { MessageTime, UserAvatar } from "../../shared"
 import { MessageFiles } from "./message-files"
 import { MessageReactions } from "./message-reactions"
+import { RagMessage } from "./rag-message"
 import type { UiMessage, UiMessageReaction } from "@/types/messages-ui"
 import DOMPurify from "isomorphic-dompurify"
 import { marked } from "marked"
@@ -17,14 +18,26 @@ interface MessageItemProps {
   onReactionSelect: (messageId: number, emoji: string) => void
   onThreadSelect: (messageId: number) => void
   isThreadMessage?: boolean
+  isStreaming?: boolean
 }
 
 export function MessageItem({
   message,
   onReactionSelect,
   onThreadSelect,
-  isThreadMessage = false
+  isThreadMessage = false,
+  isStreaming = false
 }: MessageItemProps) {
+  // If it's a RAG message, use the specialized component
+  if (message.message_type === 'rag') {
+    return (
+      <RagMessage 
+        message={message}
+        isStreaming={isStreaming}
+      />
+    )
+  }
+
   const formattedContent = useMemo(() => {
     const rawMarkdown = message.message || ''
     const html = marked.parse(rawMarkdown, { async: false }) as string
@@ -72,42 +85,51 @@ export function MessageItem({
               </button>
             ))}
           </div>
-        </div>
-      </div>
 
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-8 top-2 flex items-center gap-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="text-gray-500 hover:text-gray-700 p-2 rounded hover:bg-gray-100 flex items-center gap-2"
-            >
-              <SmileIcon className="h-5 w-5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-2" align="end">
-            <div className="grid grid-cols-4 gap-2">
-              {EMOJI_LIST.map((emoji) => (
+          {!isThreadMessage && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    <SmileIcon className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-2">
+                  <div className="grid grid-cols-4 gap-2">
+                    {EMOJI_LIST.map((emoji) => (
+                      <Button
+                        key={emoji}
+                        variant="ghost"
+                        className="h-8 px-2"
+                        onClick={() => onReactionSelect(message.id, emoji)}
+                      >
+                        {emoji}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {message.message_type !== 'thread' && (
                 <Button
-                  key={emoji}
                   variant="ghost"
-                  className="h-8 px-2"
-                  onClick={() => onReactionSelect(message.id, emoji)}
+                  size="sm"
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                  onClick={() => onThreadSelect(message.id)}
                 >
-                  {emoji}
+                  <MessageSquareIcon className="h-4 w-4 mr-1" />
+                  {message.thread_count > 0 && (
+                    <span>{message.thread_count}</span>
+                  )}
                 </Button>
-              ))}
+              )}
             </div>
-          </PopoverContent>
-        </Popover>
-
-        {!isThreadMessage && (
-          <button
-            onClick={() => onThreadSelect(message.id)}
-            className="text-gray-500 hover:text-gray-700 p-2 rounded hover:bg-gray-100 flex items-center gap-2"
-          >
-            <MessageSquareIcon className="h-5 w-5" />
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

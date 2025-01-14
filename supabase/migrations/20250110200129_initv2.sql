@@ -58,6 +58,7 @@ create table public.message_files (
   message_id bigint references public.messages on delete cascade not null,
   file_type file_type not null,
   file_url text not null,
+  vector_status text default 'pending' check (vector_status in ('pending', 'processing', 'completed', 'failed')),
   inserted_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 comment on table public.message_files is 'Files attached to messages.';
@@ -338,8 +339,73 @@ create policy "Users can delete their own reactions"
   to authenticated
   using (auth.uid() = user_id);
 
+-- Create policies for message_files
+create policy "Users can read message files"
+  on public.message_files for select
+  to authenticated
+  using (true);
+
+create policy "Users can insert message files"
+  on public.message_files for insert
+  to authenticated
+  with check (exists (
+    select 1 from public.messages
+    where id = message_id
+    and user_id = auth.uid()
+  ));
+
+create policy "Users can update their own message files"
+  on public.message_files for update
+  to authenticated
+  using (exists (
+    select 1 from public.messages
+    where id = message_id
+    and user_id = auth.uid()
+  ));
+
+create policy "Users can delete their own message files"
+  on public.message_files for delete
+  to authenticated
+  using (exists (
+    select 1 from public.messages
+    where id = message_id
+    and user_id = auth.uid()
+  ));
+
 -- Drop existing realtime configuration
 drop publication if exists supabase_realtime;
+
+-- Create vectors table
+create table vectors (
+    id uuid primary key default uuid_generate_v4(),
+    file_id bigint references message_files(id) on delete cascade,
+    chunk_index integer not null,
+    vector_id text not null,
+    chunk_text text not null,
+    created_at timestamp with time zone default now(),
+    -- Add indexes for common queries
+    unique(file_id, chunk_index),
+    unique(vector_id)
+);
+
+-- Add function to cleanup vectors when message_files are deleted
+create or replace function public.handle_deleted_message_file()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+    -- Vectors are automatically deleted via cascade
+    return old;
+end;
+$$;
+
+-- Add trigger for message_files deletion
+drop trigger if exists on_message_file_deleted on message_files;
+create trigger on_message_file_deleted
+    after delete on message_files
+    for each row
+    execute function handle_deleted_message_file();
 
 -- Create new realtime publication with all tables except role_permissions, user_roles, and channels
 create publication supabase_realtime for table 

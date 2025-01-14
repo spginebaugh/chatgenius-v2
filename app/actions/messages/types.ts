@@ -8,6 +8,7 @@ export interface HandleMessageProps {
   channelId?: number
   receiverId?: string
   parentMessageId?: number
+  isRagQuery?: boolean
 }
 
 // Internal message data structure for server actions

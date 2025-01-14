@@ -47,7 +47,8 @@ export function ProfileSettingsPanel({
         onClose()
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update username")
+      console.error('Error updating username:', error)
+      toast.error("Failed to update username. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

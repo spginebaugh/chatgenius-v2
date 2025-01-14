@@ -19,6 +19,7 @@ export interface UiFileAttachment {
   url: string
   type: FileType
   name: string // Derived from url or default
+  vector_status?: 'pending' | 'processing' | 'completed' | 'failed' // Optional: for RAG support
 }
 
 /**

@@ -5,6 +5,7 @@ import { requireAuth } from '@/app/_lib/auth'
 import type { MessageData, HandleMessageProps } from './types'
 import type { DbMessage, FileType } from '@/types/database'
 import type { UiMessage } from '@/types/messages-ui'
+import { processAndStoreFile, queryDocuments } from '@/lib/rag/rag-service'
 
 const MESSAGE_SELECT_QUERY = `
   *,
@@ -85,17 +86,19 @@ async function insertMessage(messageData: MessageData) {
 
 async function processFileAttachment(params: {
   messageId: number
-  file: { type: FileType; url: string }
+  file: { type: FileType; url: string; name: string }
 }) {
   const { messageId, file } = params
   const supabase = await createClient()
   
+  // Insert file record with pending status
   const { data: fileData, error: fileError } = await supabase
     .from('message_files')
     .insert({
       message_id: messageId,
       file_type: file.type,
       file_url: file.url,
+      vector_status: 'pending',
       inserted_at: new Date().toISOString()
     })
     .select('*')
@@ -104,6 +107,45 @@ async function processFileAttachment(params: {
   if (fileError) {
     console.error('Error inserting file:', { error: fileError, file, messageId })
     throw fileError
+  }
+
+  // Only process PDFs and text files for RAG
+  if (file.type === 'document' && (file.name.endsWith('.pdf') || file.name.endsWith('.txt'))) {
+    try {
+      // Update status to processing
+      await supabase
+        .from('message_files')
+        .update({ vector_status: 'processing' })
+        .eq('id', fileData.id)
+
+      // Download file content
+      const { data: fileContent, error: downloadError } = await supabase.storage
+        .from('chat-attachments')
+        .download(file.url.split('/').pop()!)
+
+      if (downloadError) throw downloadError
+
+      // Process file for RAG
+      await processAndStoreFile(
+        Buffer.from(await fileContent.arrayBuffer()),
+        file.name,
+        fileData.id
+      )
+
+      // Update status to completed
+      await supabase
+        .from('message_files')
+        .update({ vector_status: 'completed' })
+        .eq('id', fileData.id)
+
+    } catch (error) {
+      console.error('Error processing file for RAG:', error)
+      // Update status to failed
+      await supabase
+        .from('message_files')
+        .update({ vector_status: 'failed' })
+        .eq('id', fileData.id)
+    }
   }
 
   return fileData
@@ -147,10 +189,43 @@ export async function handleMessage({
   files, 
   channelId, 
   receiverId, 
-  parentMessageId 
+  parentMessageId,
+  isRagQuery = false
 }: HandleMessageProps) {
   const user = await requireAuth({ throwOnMissingProfile: true })
   
+  if (isRagQuery) {
+    // First store the user's query
+    const userMessageData = createMessageData({
+      message,
+      userId: user.id,
+      channelId,
+      receiverId,
+      parentMessageId
+    })
+    const userMessage = await insertMessage(userMessageData)
+
+    // Then handle RAG query
+    const response = await queryDocuments(message, user.id)
+    
+    // Create message with RAG response
+    const responseMessageData = createMessageData({
+      message: response.content,
+      userId: process.env.RAG_BOT_USER_ID || user.id, // Use RAG bot user if configured
+      channelId,
+      receiverId,
+      parentMessageId
+    })
+
+    // Set message type to 'rag'
+    responseMessageData.message_type = 'rag'
+
+    // Insert the response message
+    const responseMessage = await insertMessage(responseMessageData)
+    return formatMessageResponse(responseMessage)
+  }
+
+  // Handle regular message
   const messageData = createMessageData({
     message,
     userId: user.id,

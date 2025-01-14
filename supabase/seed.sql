@@ -1,9 +1,3 @@
--- Reset tables
-truncate table public.users cascade;
-truncate table auth.users cascade;
-truncate table public.user_roles cascade;
-truncate table public.role_permissions cascade;
-
 -- Seed initial admin user
 insert into auth.users (id, email)
 values 
@@ -126,9 +120,4 @@ begin
   values
     (hey_everyone_id, 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e'),
     (lunch_message_id, 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f');
-
-  -- Seed file attachments
-  insert into public.message_files (message_id, file_type, file_url)
-  values
-    (kickoff_message_id, 'document', 'https://example.com/files/project-kickoff.pdf');
 end $$;

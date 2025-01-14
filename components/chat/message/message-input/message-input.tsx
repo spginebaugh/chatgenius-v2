@@ -11,6 +11,7 @@ import { THEME_COLORS, MESSAGE_INPUT_CONFIG } from "../../shared"
 import type { UiFileAttachment } from "@/types/messages-ui"
 import { FormattingToolbar } from "./formatting-toolbar"
 import { FileUpload } from "./file-upload"
+import { RagQueryButton } from "../rag-query-button"
 
 const turndownService = new TurndownService({
   headingStyle: 'atx',
@@ -19,15 +20,21 @@ const turndownService = new TurndownService({
 
 interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string, files?: UiFileAttachment[]) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  isLoading?: boolean
 }
 
-export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) {
+export function MessageInput({ 
+  placeholder, 
+  onSendMessage, 
+  isLoading = false
+}: MessageInputProps) {
   const [html, setHtml] = useState("")
   const [linkUrl, setLinkUrl] = useState("")
   const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UiFileAttachment[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [isRagMode, setIsRagMode] = useState(false)
   const contentEditableRef = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
@@ -39,9 +46,10 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
       
       if (markdown.trim() || uploadedFiles.length > 0) {
         try {
-          await onSendMessage(markdown, uploadedFiles)
+          await onSendMessage(markdown, uploadedFiles, isRagMode)
           setHtml("")
           setUploadedFiles([])
+          // Don't reset RAG mode after sending - let user toggle it manually
         } catch (error) {
           console.error("Error sending message:", error)
           toast.error("Failed to send message. Please try again.")
@@ -178,16 +186,22 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
                 html={html}
                 onChange={handleChange}
                 onPaste={handlePaste}
-                className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[${THEME_COLORS.primary}] focus:ring-1 focus:ring-[${THEME_COLORS.primary}]`}
-                placeholder={placeholder}
+                className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[${THEME_COLORS.primary}] focus:ring-1 focus:ring-[${THEME_COLORS.primary}] ${isLoading ? 'opacity-50' : ''}`}
+                placeholder={isRagMode ? "Ask a question about your documents..." : placeholder}
                 tagName="div"
+                disabled={isLoading}
               />
             </div>
+            <RagQueryButton
+              isActive={isRagMode}
+              onClick={() => setIsRagMode(!isRagMode)}
+              disabled={isUploading || isLoading}
+            />
             <Button 
               type="submit"
               size="icon"
               className={`h-10 w-10 rounded-full bg-[${THEME_COLORS.primary}] hover:bg-[${THEME_COLORS.primaryHover}] text-white shadow-md`}
-              disabled={isUploading}
+              disabled={isUploading || isLoading}
             >
               <ArrowUp className="h-5 w-5" />
             </Button>

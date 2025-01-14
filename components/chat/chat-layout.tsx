@@ -19,9 +19,10 @@ interface ChatLayoutProps {
   users: User[]
   channels: Channel[]
   messages: UiMessage[]
-  onSendMessage: (message: string, files?: UiFileAttachment[]) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
   onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
   initialView: ChatViewData
+  isLoading?: boolean
 }
 
 export function ChatLayout({
@@ -31,7 +32,8 @@ export function ChatLayout({
   messages,
   onSendMessage,
   onEmojiSelect,
-  initialView
+  initialView,
+  isLoading = false
 }: ChatLayoutProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<UiMessage | null>(null)
@@ -76,18 +78,17 @@ export function ChatLayout({
     setSelectedMessage(null)
   }
 
-  const handleThreadMessage = async (message: string) => {
+  const handleMainMessage = async (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => {
     try {
-      if (!selectedMessage) return
-      
       await handleMessage({
         message,
-        parentMessageId: selectedMessage.id,
+        files,
+        isRagQuery,
         channelId: initialView.type === 'channel' ? (initialView.data as Channel).id : undefined,
         receiverId: initialView.type === 'dm' ? (initialView.data as User).id : undefined
       })
     } catch (error) {
-      console.error('Failed to send thread message:', error)
+      console.error('Failed to send message:', error)
     }
   }
 
@@ -172,7 +173,8 @@ export function ChatLayout({
                     ? `Message #${(initialView.data as Channel).slug}` 
                     : `Message ${(initialView.data as User).username}`
                 }
-                onSendMessage={onSendMessage}
+                onSendMessage={handleMainMessage}
+                isLoading={isLoading}
               />
             </div>
           </div>
@@ -180,7 +182,7 @@ export function ChatLayout({
             <ThreadPanel
               parentMessage={selectedMessage}
               currentUserId={currentUser.id}
-              onSendMessage={handleThreadMessage}
+              onSendMessage={handleMainMessage}
               onClose={handleThreadClose}
               onEmojiSelect={onEmojiSelect}
             />

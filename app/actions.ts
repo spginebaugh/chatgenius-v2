@@ -248,23 +248,3 @@ export async function logout() {
     return { success: false, error: 'Failed to logout' };
   }
 }
-
-export async function updateUsername(newUsername: string) {
-  const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Not authenticated" };
-  }
-
-  await updateRecord<User>({
-    table: 'users',
-    data: { username: newUsername },
-    match: { id: user.id },
-    options: {
-      revalidatePath: '/'
-    }
-  });
-
-  return { success: true };
-}
