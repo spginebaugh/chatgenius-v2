@@ -1,50 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { User, Channel, DbMessage, MessageFile } from "@/types/database"
-import { UiMessage } from "@/types/messages-ui"
 import { FileAttachment } from "@/app/_lib/message-helpers"
 import { Sidebar } from "."
-import { MessageList } from "."
-import { MessageInput } from "."
+import { MessageList } from "./message/message-list"
+import { MessageInput } from "./message/message-input"
 import { ThreadPanel } from "./thread-panel"
 import { handleMessage } from "@/app/actions/messages/index"
-import { useUsersStore } from "@/lib/stores/users"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { ProfileSettingsPanel } from "./profile-settings-panel"
-
-// Base message type without thread_messages to avoid recursion
-interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
-  profiles: {
-    id: string
-    username: string // We ensure this is never null when formatting
-  }
-  files?: MessageFile[]
-  reactions?: Array<{
-    emoji: string
-    count: number
-    reacted_by_me: boolean
-  }>
-}
-
-// Message type with thread messages
-type DisplayMessage = BaseMessage & {
-  thread_messages?: DisplayMessage[]
-}
+import { ThreadMessage, ChatViewData, UserAvatar, THEME_COLORS } from "./shared"
+import type { User, Channel } from "@/types/database"
 
 interface ChatLayoutProps {
   currentUser: User
   users: User[]
   channels: Channel[]
-  messages: DisplayMessage[]
+  messages: ThreadMessage[]
   onSendMessage: (message: string, files?: FileAttachment[]) => Promise<void>
   onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
-  initialView: {
-    type: 'channel' | 'dm'
-    data: Channel | User
-  }
+  initialView: ChatViewData
 }
 
 export function ChatLayout({
@@ -57,7 +34,7 @@ export function ChatLayout({
   initialView
 }: ChatLayoutProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [selectedMessage, setSelectedMessage] = useState<DisplayMessage | null>(null)
+  const [selectedMessage, setSelectedMessage] = useState<ThreadMessage | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -91,7 +68,7 @@ export function ChatLayout({
     }
   }
 
-  const handleThreadClick = (message: DisplayMessage) => {
+  const handleThreadClick = (message: ThreadMessage) => {
     setSelectedMessage(message)
   }
 
@@ -122,7 +99,7 @@ export function ChatLayout({
         currentView={initialView}
       />
       <div className="flex-1 flex flex-col min-w-0 bg-white">
-        <div className="h-14 bg-[#333F48] flex items-center justify-between px-4 flex-shrink-0">
+        <div className={`h-14 bg-[${THEME_COLORS.headerBg}] flex items-center justify-between px-4 flex-shrink-0`}>
           <div className="text-white font-semibold">
             {initialView.type === 'channel' ? (
               <span>#{(initialView.data as Channel).slug}</span>
@@ -178,11 +155,14 @@ export function ChatLayout({
         </div>
         <div className="flex flex-1 min-w-0 overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto text-gray-900">
               <MessageList 
                 messages={messages} 
-                onEmojiSelect={onEmojiSelect}
-                onThreadClick={handleThreadClick}
+                onReactionSelect={onEmojiSelect}
+                onThreadSelect={(messageId) => {
+                  const message = messages.find(m => m.id === messageId)
+                  if (message) handleThreadClick(message)
+                }}
               />
             </div>
             <div className="flex-shrink-0">

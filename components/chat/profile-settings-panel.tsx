@@ -5,11 +5,25 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { updateUsername } from "@/app/actions/profile"
 import { toast } from "sonner"
-import type { User } from "@/types/database"
+import { THEME_COLORS } from "./shared"
 
 interface ProfileSettingsPanelProps {
   currentUsername: string | null
   onClose: () => void
+}
+
+function PanelHeader({ onClose }: { onClose: () => void }) {
+  return (
+    <div className={`h-14 bg-[${THEME_COLORS.headerBg}] flex items-center justify-between px-4`}>
+      <div className="text-white font-semibold">Profile Settings</div>
+      <button 
+        onClick={onClose}
+        className="text-white hover:text-gray-300"
+      >
+        ✕
+      </button>
+    </div>
+  )
 }
 
 export function ProfileSettingsPanel({ 
@@ -41,16 +55,7 @@ export function ProfileSettingsPanel({
 
   return (
     <div className="w-96 border-l border-gray-200 flex flex-col bg-white h-full">
-      {/* Header */}
-      <div className="h-14 bg-[#333F48] flex items-center justify-between px-4">
-        <div className="text-white font-semibold">Profile Settings</div>
-        <button 
-          onClick={onClose}
-          className="text-white hover:text-gray-300"
-        >
-          ✕
-        </button>
-      </div>
+      <PanelHeader onClose={onClose} />
 
       <div className="flex-1 overflow-y-auto p-4">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,7 +79,7 @@ export function ProfileSettingsPanel({
 
           <Button 
             type="submit" 
-            className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white"
+            className={`w-full bg-[${THEME_COLORS.primary}] hover:bg-[${THEME_COLORS.primaryHover}] text-white`}
             disabled={username === currentUsername || !username.trim() || isSubmitting}
           >
             {isSubmitting ? "Updating..." : "Update Username"}

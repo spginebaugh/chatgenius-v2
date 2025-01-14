@@ -4,11 +4,11 @@ import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useMessagesStore } from '@/lib/stores/messages/index'
 import { useRealtimeMessages } from '@/lib/client/hooks/realtime-messages'
-import type { UiMessage } from '@/types/messages-ui'
-import type { DbMessage } from '@/types/database'
+import type { ThreadMessage } from './shared'
+import type { User, MessageReaction } from '@/types/database'
 
 interface ChatClientFetchProps {
-  currentUser: { id: string }
+  currentUser: Pick<User, 'id'>
   currentChannelId?: number
   currentDmUserId?: string
   parentMessageId?: number
@@ -87,19 +87,27 @@ export function ChatClientFetch({
       }
 
       // Format messages for UI
-      const formattedMessages: UiMessage[] = messages.map(message => ({
+      const formattedMessages: ThreadMessage[] = messages.map(message => ({
         ...message,
         profiles: message.profiles || {
           id: message.user_id,
-          username: 'Unknown'
+          username: 'Unknown',
+          status: undefined,
+          profile_picture_url: null
         },
         files: message.files || [],
-        reactions: message.reactions || [],
+        reactions: message.reactions?.map((reaction: MessageReaction) => ({
+          emoji: reaction.emoji,
+          count: 1,
+          reacted_by_me: reaction.user_id === currentUser.id
+        })) || [],
         thread_messages: message.thread_messages?.map((threadMsg: { user_id: string }) => ({
           ...threadMsg,
           profiles: {
             id: threadMsg.user_id,
-            username: 'Unknown'
+            username: 'Unknown',
+            status: undefined,
+            profile_picture_url: null
           },
           files: [],
           reactions: []

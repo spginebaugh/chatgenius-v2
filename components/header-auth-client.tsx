@@ -22,10 +22,14 @@ interface UserData {
   status: string | null;
 }
 
-export function AuthButton() {
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+interface AuthState {
+  user: User | null;
+  userData: UserData | null;
+  error: string | null;
+  envError: string | null;
+}
+
+function useEnvCheck() {
   const [envError, setEnvError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,54 +44,80 @@ export function AuthButton() {
     }
   }, [])
 
+  return envError
+}
+
+async function fetchUserData(user: User) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("users")
+    .select("username, status")
+    .eq("id", user.id)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+function useAuthState(envError: string | null): AuthState {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    userData: null,
+    error: null,
+    envError
+  })
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
         if (envError) throw new Error(envError)
-        const supabase = createClient();
+        const supabase = createClient()
 
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
-
-        setAuthUser(user);
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError) throw authError
 
         if (user) {
-          const { data, error: userError } = await supabase
-            .from("users")
-            .select("username, status")
-            .eq("id", user.id)
-            .single();
-
-          if (userError) throw userError;
-          setUserData(data);
+          const userData = await fetchUserData(user)
+          setState({ user, userData, error: null, envError })
+        } else {
+          setState({ user: null, userData: null, error: null, envError })
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        setState({
+          user: null,
+          userData: null,
+          error: err instanceof Error ? err.message : 'An error occurred',
+          envError
+        })
       }
-    };
+    }
 
-    fetchUser();
-  }, [envError]);
+    fetchUser()
+  }, [envError])
 
-  if (envError) {
-    return (
-      <div className="bg-destructive/15 p-4 rounded-md">
-        <p className="text-sm text-destructive">Configuration Error: {envError}</p>
-      </div>
-    )
-  }
+  return state
+}
 
-  if (error) {
-    return (
-      <div className="flex gap-4 items-center">
-        <Badge variant="destructive" className="font-normal">
-          {error}
-        </Badge>
-      </div>
-    );
-  }
+function ErrorDisplay({ error }: { error: string }) {
+  return (
+    <div className="flex gap-4 items-center">
+      <Badge variant="destructive" className="font-normal">
+        {error}
+      </Badge>
+    </div>
+  )
+}
 
-  return authUser ? (
+function EnvErrorDisplay({ error }: { error: string }) {
+  return (
+    <div className="bg-destructive/15 p-4 rounded-md">
+      <p className="text-sm text-destructive">Configuration Error: {error}</p>
+    </div>
+  )
+}
+
+function UserDropdown({ user, userData }: { user: User; userData: UserData | null }) {
+  return (
     <div className="flex items-center gap-4">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -97,7 +127,7 @@ export function AuthButton() {
               className={userData?.status === "ONLINE" ? "text-green-500" : "text-gray-500"}
               fill="currentColor"
             />
-            {userData?.username || authUser.email}
+            {userData?.username || user.email}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -114,14 +144,37 @@ export function AuthButton() {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  ) : (
+  )
+}
+
+function AuthButtons() {
+  return (
     <div className="flex gap-2">
-      <Button asChild size="sm" variant={"outline"}>
+      <Button asChild size="sm" variant="outline">
         <Link href="/sign-in">Sign in</Link>
       </Button>
-      <Button asChild size="sm" variant={"default"}>
+      <Button asChild size="sm" variant="default">
         <Link href="/sign-up">Sign up</Link>
       </Button>
     </div>
-  );
+  )
+}
+
+export function AuthButton() {
+  const envError = useEnvCheck()
+  const { user, userData, error } = useAuthState(envError)
+
+  if (envError) {
+    return <EnvErrorDisplay error={envError} />
+  }
+
+  if (error) {
+    return <ErrorDisplay error={error} />
+  }
+
+  return user ? (
+    <UserDropdown user={user} userData={userData} />
+  ) : (
+    <AuthButtons />
+  )
 } 

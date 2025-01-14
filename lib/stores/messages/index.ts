@@ -1,7 +1,7 @@
 "use client"
 
 import { create } from 'zustand'
-import type { UiMessage } from '@/types/messages-ui'
+import type { UiMessage, UiMessageReaction } from '@/types/messages-ui'
 import type { MessageReaction } from '@/types/database'
 import type { MessagesState, MessageStoreType } from './types'
 import { getStoreKey, mergeMessages, formatReactions, formatMessageForStore } from './utils'
@@ -82,17 +82,16 @@ const createMessageActions = (
     }))
   },
 
-  updateReactions: (type: MessageStoreType, key: string | number, messageId: number, reactions: MessageReaction[]) => {
+  updateReactions: (type: MessageStoreType, key: string | number, messageId: number, reactions: UiMessageReaction[]) => {
     const storeKey = getStoreKey(type, key)
     const existingMessage = get().messages[type][storeKey]?.find(msg => msg.id === messageId)
     
     if (!existingMessage) return
 
-    const updatedReactions = formatReactions(reactions, existingMessage.user_id)
     const updatedMessages = updateMessageInList(
       get().messages[type][storeKey],
       messageId,
-      msg => ({ ...msg, reactions: updatedReactions })
+      msg => ({ ...msg, reactions })
     )
 
     set(state => ({

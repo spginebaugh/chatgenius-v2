@@ -1,4 +1,4 @@
-import type { UiMessage } from '@/types/messages-ui'
+import type { UiMessage, UiMessageReaction } from '@/types/messages-ui'
 import type { MessageReaction } from '@/types/database'
 
 export type MessageStoreType = 'channels' | 'dms' | 'threads'
@@ -12,7 +12,7 @@ export interface MessagesState {
   error: string | null
   isLoading: boolean
   setMessages: (type: MessageStoreType, key: string | number, messages: UiMessage[]) => void
-  updateReactions: (type: MessageStoreType, key: string | number, messageId: number, reactions: MessageReaction[]) => void
+  updateReactions: (type: MessageStoreType, key: string | number, messageId: number, reactions: UiMessageReaction[]) => void
   addMessage: (type: MessageStoreType, key: string | number, message: UiMessage) => void
   addThreadMessage: (parentId: number, message: UiMessage) => void
   deleteMessage: (type: MessageStoreType, key: string | number, messageId: number) => void

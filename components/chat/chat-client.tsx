@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useState, useCallback, memo } from "react"
-import { Channel, User, DbMessage, MessageFile, MessageReaction } from "@/types/database"
-import { UiMessage } from "@/types/messages-ui"
+import type { User, Channel, DbMessage, UserStatus, MessageReaction } from "@/types/database"
+import type { UiMessageReaction } from "@/types/messages-ui"
 import { FileAttachment } from "@/app/_lib/message-helpers"
 import { ChatLayout } from "./chat-layout"
 import { useMessagesStore } from "@/lib/stores/messages/index"
@@ -13,25 +13,17 @@ import { useRealtimeUsers } from "@/lib/client/hooks/use-realtime-users"
 import { useRealtimeChannels } from "@/lib/client/hooks/use-realtime-channels"
 import { addEmojiReaction } from "@/app/actions/messages"
 import { handleMessage } from "@/app/actions/messages/index"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ProfileSettingsPanel } from "./profile-settings-panel"
 import { createClient } from "@/lib/supabase/client"
 import { ChatClientFetch } from "./chat-client-fetch"
+import { ThreadMessage, ChatViewData } from "./shared"
+import { formatReactions } from "@/lib/stores/messages/utils"
 
 interface ChatClientProps {
-  initialView: {
-    type: 'channel' | 'dm'
-    data: Channel | User
-  }
+  initialView: ChatViewData
   currentUser: User
   channels: Channel[]
   users: User[]
-  initialMessages: UiMessage[]
+  initialMessages: ThreadMessage[]
 }
 
 function ChatClientComponent({ initialView, currentUser, channels, users, initialMessages }: ChatClientProps) {
@@ -84,14 +76,16 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
         })
 
         // Create the base message with user info
-        const mappedMessage: UiMessage = {
+        const mappedMessage: ThreadMessage = {
           ...msg,
           profiles: {
             id: user?.id || msg.user_id,
-            username: user?.username || ''
+            username: user?.username || '',
+            status: user?.status,
+            profile_picture_url: user?.profile_picture_url
           },
-          files: [],
-          reactions: []
+          files: msg.files || [],
+          reactions: msg.reactions || []
         }
 
         // If this message has thread messages, map those too
@@ -104,10 +98,12 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
                 ...threadMsg,
                 profiles: {
                   id: threadUser?.id || threadMsg.user_id,
-                  username: threadUser?.username || ''
+                  username: threadUser?.username || '',
+                  status: threadUser?.status,
+                  profile_picture_url: threadUser?.profile_picture_url
                 },
-                files: [],
-                reactions: []
+                files: threadMsg.files || [],
+                reactions: threadMsg.reactions || []
               }
             })
           }
@@ -133,7 +129,7 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
           acc[parentId].push(msg)
         }
         return acc
-      }, {} as Record<number, UiMessage[]>)
+      }, {} as Record<number, ThreadMessage[]>)
 
       // Set each thread's messages in the store
       Object.entries(threadsByParent).forEach(([parentId, messages]) => {
@@ -173,12 +169,13 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
     // Always process the message if it doesn't exist or if it's more recent
     if (!existingMessage || new Date(message.inserted_at) > new Date(existingMessage.inserted_at)) {
       const user = storeUsers.find(u => u.id === message.user_id)
-      const displayMessage = {
+      const displayMessage: ThreadMessage = {
         ...message,
         profiles: {
           id: user?.id || '',
           username: user?.username || 'Unknown',
-          status: user?.status
+          status: user?.status,
+          profile_picture_url: user?.profile_picture_url
         },
         files: [],
         reactions: existingMessage?.reactions || []
@@ -195,7 +192,7 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
   const handleMessageUpdate = useCallback((message: DbMessage) => {
     console.log("Realtime message update:", message)
     const user = storeUsers.find(u => u.id === message.user_id)
-    const displayMessage: UiMessage = {
+    const displayMessage: ThreadMessage = {
       ...message,
       profiles: {
         id: user?.id || message.user_id,
@@ -217,8 +214,9 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
 
   const handleReactionUpdate = useCallback((messageId: number, reactions: MessageReaction[]) => {
     console.log("Realtime reaction update:", { messageId, reactions })
-    updateReactions(messageType, key, messageId, reactions)
-  }, [key, messageType, updateReactions])
+    const displayReactions = formatReactions(reactions, currentStoreUser.id)
+    updateReactions(messageType, key, messageId, displayReactions)
+  }, [key, messageType, updateReactions, currentStoreUser.id])
 
   // Setup real-time message updates
   useRealtimeMessages({
@@ -305,26 +303,6 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
     } catch (error) {
       console.error('Failed to toggle reaction:', error)
     }
-  }, [])
-
-  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [selectedMessage, setSelectedMessage] = useState<UiMessage | null>(null)
-
-  const handleReaction = useCallback(async (message: UiMessage, emoji: string) => {
-    try {
-      await addEmojiReaction({
-        messageId: message.id,
-        emoji
-      })
-      // Let the realtime subscription handle the reaction update
-    } catch (error) {
-      console.error('Failed to toggle reaction:', error)
-    }
-  }, [])
-
-  const handleThreadClick = useCallback((message: UiMessage) => {
-    setSelectedMessage(message)
   }, [])
 
   return (

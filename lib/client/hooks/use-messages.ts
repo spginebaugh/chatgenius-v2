@@ -24,6 +24,100 @@ interface FormattedReaction {
   reacted_by_me: boolean
 }
 
+interface MessageQueryParams {
+  channelId?: number
+  receiverId?: string
+  parentMessageId?: number
+}
+
+interface FormatMessageParams {
+  message: DbMessage & {
+    reactions?: MessageReaction[]
+    user?: { id: string; username: string }
+  }
+  currentUserId: string
+}
+
+function buildMessageQuery(supabase: ReturnType<typeof createClient>, params: MessageQueryParams) {
+  let query = supabase
+    .from('messages')
+    .select(`
+      *,
+      user:users(id, username),
+      reactions:message_reactions(
+        id,
+        message_id,
+        user_id,
+        emoji,
+        inserted_at
+      )
+    `)
+
+  if (params.channelId) query = query.eq('channel_id', params.channelId)
+  if (params.receiverId) query = query.eq('receiver_id', params.receiverId)
+  if (params.parentMessageId) query = query.eq('parent_message_id', params.parentMessageId)
+
+  return query
+}
+
+function formatReactions(reactions: MessageReaction[] = [], currentUserId: string): FormattedReaction[] {
+  const reactionMap = reactions.reduce((acc: Record<string, FormattedReaction>, r: MessageReaction) => {
+    if (!acc[r.emoji]) {
+      acc[r.emoji] = {
+        emoji: r.emoji,
+        count: 0,
+        reacted_by_me: false
+      }
+    }
+    acc[r.emoji].count++
+    if (r.user_id === currentUserId) {
+      acc[r.emoji].reacted_by_me = true
+    }
+    return acc
+  }, {})
+
+  return Object.values(reactionMap)
+}
+
+function formatMessage({ message, currentUserId }: FormatMessageParams): UiMessage {
+  return {
+    ...message,
+    profiles: message.user || {
+      id: message.user_id,
+      username: 'Unknown'
+    },
+    reactions: formatReactions(message.reactions, currentUserId),
+    thread_messages: [],
+    thread_count: 0
+  }
+}
+
+async function fetchCurrentUser(supabase: ReturnType<typeof createClient>) {
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error) throw error
+  if (!user) throw new Error('No user found')
+  return user
+}
+
+async function fetchMessagesData({
+  channelId,
+  receiverId,
+  parentMessageId,
+  supabase
+}: MessageQueryParams & {
+  supabase: ReturnType<typeof createClient>
+}) {
+  if (!channelId && !receiverId && !parentMessageId) return []
+
+  const query = buildMessageQuery(supabase, { channelId, receiverId, parentMessageId })
+  const { data: messagesData, error: queryError } = await query
+
+  if (queryError) throw queryError
+  if (!messagesData) throw new Error('No data returned')
+
+  return messagesData
+}
+
 export function useMessages({ 
   channelId,
   receiverId,
@@ -36,65 +130,20 @@ export function useMessages({
 
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!channelId && !receiverId && !parentMessageId) return
-
       try {
         setIsLoading(true)
-        
         const supabase = createClient()
-        let query = supabase
-          .from('messages')
-          .select(`
-            *,
-            user:users(id, username),
-            reactions:message_reactions(
-              id,
-              message_id,
-              user_id,
-              emoji,
-              inserted_at
-            )
-          `)
 
-        if (channelId) query = query.eq('channel_id', channelId)
-        if (receiverId) query = query.eq('receiver_id', receiverId)
-        if (parentMessageId) query = query.eq('parent_message_id', parentMessageId)
+        const [currentUser, messagesData] = await Promise.all([
+          fetchCurrentUser(supabase),
+          fetchMessagesData({ channelId, receiverId, parentMessageId, supabase })
+        ])
 
-        const { data: messagesData, error: queryError } = await query
+        const formattedMessages = messagesData.map(msg => 
+          formatMessage({ message: msg, currentUserId: currentUser.id })
+        )
 
-        if (queryError) throw queryError
-        if (!messagesData) throw new Error('No data returned')
-
-        // Get current user for reaction formatting
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('No user found')
-
-        // Format messages with reactions
-        const formattedMessages = messagesData.map(msg => ({
-          ...msg,
-          reactions: msg.reactions ? msg.reactions.reduce((acc: Record<string, FormattedReaction>, r: MessageReaction) => {
-            if (!acc[r.emoji]) {
-              acc[r.emoji] = {
-                emoji: r.emoji,
-                count: 0,
-                reacted_by_me: false
-              }
-            }
-            acc[r.emoji].count++
-            if (r.user_id === user.id) {
-              acc[r.emoji].reacted_by_me = true
-            }
-            return acc
-          }, {}) : {}
-        }))
-
-        // Convert reaction objects to arrays
-        const finalMessages = formattedMessages.map(msg => ({
-          ...msg,
-          reactions: Object.values(msg.reactions || {})
-        }))
-
-        setMessages(finalMessages)
+        setMessages(formattedMessages)
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch messages'))
       } finally {

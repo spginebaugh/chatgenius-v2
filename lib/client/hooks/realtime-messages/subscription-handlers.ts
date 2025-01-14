@@ -18,6 +18,59 @@ export function cleanupSubscriptions(refs: SubscriptionRefs) {
   }
 }
 
+async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) {
+    console.error('No user found:', error)
+    return null
+  }
+  return user
+}
+
+function buildMessageFilter({
+  channelId,
+  receiverId,
+  parentMessageId,
+  userId
+}: {
+  channelId?: number
+  receiverId?: string
+  parentMessageId?: number
+  userId: string
+}): string {
+  if (channelId) {
+    return `channel_id=eq.${channelId}`
+  }
+  if (receiverId) {
+    return `message_type=eq.direct&or=(and(user_id.eq.${userId},receiver_id.eq.${receiverId}),and(user_id.eq.${receiverId},receiver_id.eq.${userId}))`
+  }
+  if (parentMessageId) {
+    return `parent_message_id=eq.${parentMessageId}`
+  }
+  throw new Error('No valid filter parameters provided')
+}
+
+function determineMessageContext({
+  channelId,
+  receiverId,
+  parentMessageId
+}: {
+  channelId?: number
+  receiverId?: string
+  parentMessageId?: number
+}): { messageType: 'channels' | 'dms' | 'threads'; storeKey: string | number } {
+  if (channelId) {
+    return { messageType: 'channels', storeKey: channelId }
+  }
+  if (receiverId) {
+    return { messageType: 'dms', storeKey: receiverId }
+  }
+  if (parentMessageId) {
+    return { messageType: 'threads', storeKey: parentMessageId }
+  }
+  throw new Error('No valid context parameters provided')
+}
+
 export async function initializeSubscriptionContext({
   channelId,
   receiverId,
@@ -29,42 +82,53 @@ export async function initializeSubscriptionContext({
   parentMessageId?: number
   refs: SubscriptionRefs
 }): Promise<SubscriptionContext | null> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    console.error('No user found')
-    return null
-  }
+  const user = await getCurrentUser()
+  if (!user) return null
+  
   refs.currentUserIdRef.current = user.id
 
-  let messageFilter = ''
-  let messageType: 'channels' | 'dms' | 'threads' = 'channels'
-  let storeKey: string | number = ''
+  try {
+    const { messageType, storeKey } = determineMessageContext({ channelId, receiverId, parentMessageId })
+    const messageFilter = buildMessageFilter({ channelId, receiverId, parentMessageId, userId: user.id })
 
-  if (channelId) {
-    messageFilter = `channel_id=eq.${channelId}`
-    messageType = 'channels'
-    storeKey = channelId
-  } else if (receiverId) {
-    messageFilter = `message_type=eq.direct&or=(and(user_id.eq.${user.id},receiver_id.eq.${receiverId}),and(user_id.eq.${receiverId},receiver_id.eq.${user.id}))`
-    messageType = 'dms'
-    storeKey = receiverId
-  } else if (parentMessageId) {
-    messageFilter = `parent_message_id=eq.${parentMessageId}`
-    messageType = 'threads'
-    storeKey = parentMessageId
-  } else {
-    console.error('No valid subscription parameters provided')
+    return { 
+      messageType, 
+      storeKey, 
+      messageFilter, 
+      currentUserId: user.id,
+      channelId,
+      receiverId,
+      parentMessageId
+    }
+  } catch (error) {
+    console.error('Error initializing subscription context:', error)
     return null
   }
+}
 
-  return { 
-    messageType, 
-    storeKey, 
-    messageFilter, 
-    currentUserId: user.id,
-    channelId,
-    receiverId,
-    parentMessageId
+async function handleMessageChange(
+  payload: RealtimePostgresChangesPayload<DbMessage>,
+  context: SubscriptionContext,
+  handlers: {
+    addMessage: (type: 'channels' | 'dms' | 'threads', key: string | number, message: UiMessage) => void
+    deleteMessage: (type: 'channels' | 'dms' | 'threads', key: string | number, messageId: number) => void
+  }
+) {
+  const { eventType } = payload
+
+  if (eventType === 'DELETE') {
+    const oldMessage = payload.old as DbMessage
+    handlers.deleteMessage(context.messageType, context.storeKey, oldMessage.id)
+    return
+  }
+
+  const messageData = await fetchFullMessage(payload.new.id)
+  if (!messageData) return
+
+  const formattedMessage = formatMessageForUi(messageData)
+  
+  if (isMessageInContext(messageData, context)) {
+    handlers.addMessage(context.messageType, context.storeKey, formattedMessage)
   }
 }
 
@@ -90,25 +154,39 @@ export function subscribeToMessages({
         filter: context.messageFilter
       },
       async (payload: RealtimePostgresChangesPayload<DbMessage>) => {
-        const { eventType } = payload
-
-        if (eventType === 'DELETE') {
-          const oldMessage = payload.old as DbMessage
-          deleteMessage(context.messageType, context.storeKey, oldMessage.id)
-          return
-        }
-
-        const messageData = await fetchFullMessage(payload.new.id)
-        if (!messageData) return
-
-        const formattedMessage = formatMessageForUi(messageData)
-        
-        if (isMessageInContext(messageData, context)) {
-          addMessage(context.messageType, context.storeKey, formattedMessage)
-        }
+        await handleMessageChange(payload, context, { addMessage, deleteMessage })
       }
     )
     .subscribe()
+}
+
+async function fetchMessageReactions(messageId: number): Promise<MessageReaction[]> {
+  const { data: reactions, error } = await supabase
+    .from('message_reactions')
+    .select('*')
+    .eq('message_id', messageId)
+
+  if (error) {
+    console.error('Error fetching reactions:', error)
+    return []
+  }
+
+  return reactions || []
+}
+
+async function handleReactionChange(
+  payload: RealtimePostgresChangesPayload<MessageReactionPayload>,
+  context: SubscriptionContext,
+  updateReactions: (type: 'channels' | 'dms' | 'threads', key: string | number, messageId: number, reactions: MessageReaction[]) => void
+) {
+  const reactionPayload = (payload.new || payload.old) as MessageReactionPayload | undefined
+  if (!reactionPayload?.message_id) {
+    console.error('No message ID found in reaction payload')
+    return
+  }
+
+  const reactions = await fetchMessageReactions(reactionPayload.message_id)
+  updateReactions(context.messageType, context.storeKey, reactionPayload.message_id, reactions)
 }
 
 export function subscribeToReactions({
@@ -131,23 +209,7 @@ export function subscribeToReactions({
         filter: context.messageFilter
       },
       async (payload: RealtimePostgresChangesPayload<MessageReactionPayload>) => {
-        const reactionPayload = (payload.new || payload.old) as MessageReactionPayload | undefined
-        if (!reactionPayload?.message_id) {
-          console.error('No message ID found in reaction payload')
-          return
-        }
-
-        const { data: reactions, error: reactionsError } = await supabase
-          .from('message_reactions')
-          .select('*')
-          .eq('message_id', reactionPayload.message_id)
-
-        if (reactionsError) {
-          console.error('Error fetching reactions:', reactionsError)
-          return
-        }
-
-        updateReactions(context.messageType, context.storeKey, reactionPayload.message_id, reactions || [])
+        await handleReactionChange(payload, context, updateReactions)
       }
     )
     .subscribe()
