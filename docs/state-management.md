@@ -98,7 +98,7 @@ function ThemeToggle() {
 
 ### With Loading States
 ```typescript
-import { useMessagesStore } from '@/lib/stores/messages'
+import { useMessagesStore } from '@/lib/stores/messages/index'
 
 function MessageList() {
   const { messages, isLoading, error } = useMessagesStore()
@@ -112,7 +112,7 @@ function MessageList() {
 
 ### Optimistic Updates
 ```typescript
-import { useMessagesStore } from '@/lib/stores/messages'
+import { useMessagesStore } from '@/lib/stores/messages/index'
 
 function MessageInput() {
   const { addMessage } = useMessagesStore()

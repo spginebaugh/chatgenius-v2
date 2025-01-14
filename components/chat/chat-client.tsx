@@ -6,12 +6,13 @@ import { Channel, User, DbMessage, MessageFile, MessageReaction } from "@/types/
 import { UiMessage } from "@/types/messages-ui"
 import { FileAttachment } from "@/app/_lib/message-helpers"
 import { ChatLayout } from "./chat-layout"
-import { useMessagesStore } from "@/lib/stores/messages"
+import { useMessagesStore } from "@/lib/stores/messages/index"
 import { useChannelsStore } from "@/lib/stores/channels"
-import { useRealtimeMessages } from "@/lib/client/hooks/use-realtime-messages"
+import { useRealtimeMessages } from "@/lib/client/hooks/realtime-messages"
 import { useRealtimeUsers } from "@/lib/client/hooks/use-realtime-users"
 import { useRealtimeChannels } from "@/lib/client/hooks/use-realtime-channels"
-import { addEmojiReaction, handleMessage } from "@/app/actions/messages"
+import { addEmojiReaction } from "@/app/actions/messages"
+import { handleMessage } from "@/app/actions/messages/index"
 import {
   DropdownMenu,
   DropdownMenuContent,

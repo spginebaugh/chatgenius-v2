@@ -2,11 +2,11 @@ import { createClient } from '@/app/_lib/supabase-server'
 import type { DbMessage, MessageFile, MessageReaction } from '@/types/database'
 import type { UiMessage } from '@/types/messages-ui'
 
-// Base message type without thread_messages to avoid recursion
+// Types
 interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
   profiles: {
     id: string
-    username: string // We ensure this is never null when formatting
+    username: string
   }
   files?: MessageFile[]
   reactions?: Array<{
@@ -16,7 +16,6 @@ interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
   }>
 }
 
-// Message type with thread messages
 interface DisplayMessage extends BaseMessage {
   thread_messages?: DisplayMessage[]
 }
@@ -30,7 +29,54 @@ interface MessageWithJoins extends DbMessage {
   reactions: MessageReaction[] | null
 }
 
-// Format a message for display
+// Query Constants
+const BASE_MESSAGE_QUERY = `
+  *,
+  profiles:users!messages_user_id_fkey(
+    id,
+    username
+  ),
+  files:message_files(*),
+  reactions:message_reactions(*)
+`
+
+const THREAD_MESSAGE_QUERY = `
+  *,
+  user:users(*),
+  reactions:message_reactions(*),
+  files:message_files(*),
+  mentions:message_mentions(*)
+`
+
+// Reaction Formatting
+function groupReactionsByEmoji(reactions: MessageReaction[] | null): Map<string, Set<string>> {
+  const reactionsByEmoji = new Map<string, Set<string>>()
+  
+  if (!reactions) return reactionsByEmoji
+
+  reactions.forEach(reaction => {
+    if (!reactionsByEmoji.has(reaction.emoji)) {
+      reactionsByEmoji.set(reaction.emoji, new Set())
+    }
+    reactionsByEmoji.get(reaction.emoji)!.add(reaction.user_id)
+  })
+
+  return reactionsByEmoji
+}
+
+function formatReactions(reactions: MessageReaction[] | null): DisplayMessage['reactions'] {
+  if (!reactions) return []
+  
+  const reactionsByEmoji = groupReactionsByEmoji(reactions)
+
+  return Array.from(reactionsByEmoji.entries()).map(([emoji, users]) => ({
+    emoji,
+    count: users.size,
+    reacted_by_me: false // We don't have currentUserId on server
+  }))
+}
+
+// Message Formatting
 function formatMessageForDisplay(message: MessageWithJoins): DisplayMessage {
   return {
     ...message,
@@ -44,109 +90,80 @@ function formatMessageForDisplay(message: MessageWithJoins): DisplayMessage {
   }
 }
 
-function formatReactions(reactions: MessageReaction[] | null): DisplayMessage['reactions'] {
-  if (!reactions) return []
-  
-  // Group reactions by emoji
-  const reactionsByEmoji = new Map<string, Set<string>>()
-  
-  reactions.forEach(reaction => {
-    if (!reactionsByEmoji.has(reaction.emoji)) {
-      reactionsByEmoji.set(reaction.emoji, new Set())
-    }
-    reactionsByEmoji.get(reaction.emoji)!.add(reaction.user_id)
-  })
+// Thread Message Handling
+async function fetchThreadMessages(messageIds: number[]) {
+  const supabase = await createClient()
+  const { data: threadMessages, error } = await supabase
+    .from('messages')
+    .select(THREAD_MESSAGE_QUERY)
+    .in('parent_message_id', messageIds)
+    .eq('message_type', 'thread')
+    .order('inserted_at', { ascending: true })
 
-  // Format reactions for display
-  return Array.from(reactionsByEmoji.entries()).map(([emoji, users]) => ({
-    emoji,
-    count: users.size,
-    reacted_by_me: false // We don't have currentUserId on server
-  }))
+  if (error) throw error
+  return threadMessages || []
 }
 
+function groupThreadMessagesByParent(threadMessages: DbMessage[]): Record<number, DbMessage[]> {
+  return threadMessages.reduce((acc, tm) => {
+    if (!tm.parent_message_id) return acc
+    if (!acc[tm.parent_message_id]) {
+      acc[tm.parent_message_id] = []
+    }
+    acc[tm.parent_message_id].push(tm)
+    return acc
+  }, {} as Record<number, DbMessage[]>)
+}
+
+// Channel Messages
 export async function getChannelMessages(channelId: number): Promise<DisplayMessage[]> {
   const supabase = await createClient()
   
   const { data: messages, error } = await supabase
     .from('messages')
-    .select(`
-      *,
-      profiles:users!messages_user_id_fkey(
-        id,
-        username
-      ),
-      files:message_files(*),
-      reactions:message_reactions(*)
-    `)
+    .select(BASE_MESSAGE_QUERY)
     .eq('channel_id', channelId)
     .order('inserted_at', { ascending: true })
 
   if (error) throw error
   if (!messages) return []
 
-  // Format messages for display
   return (messages as MessageWithJoins[]).map(message => formatMessageForDisplay(message))
 }
 
-// Get direct messages between users
-export async function getDirectMessages(userId: string, otherUserId: string): Promise<DbMessage[]> {
+// Direct Messages
+async function fetchDirectMessages(userId: string, otherUserId: string) {
   const supabase = await createClient()
-  const { data: messages, error: messagesError } = await supabase
+  const { data: messages, error } = await supabase
     .from('messages')
-    .select(`
-      *,
-      user:users(*),
-      reactions:message_reactions(*),
-      files:message_files(*),
-      mentions:message_mentions(*)
-    `)
+    .select(THREAD_MESSAGE_QUERY)
     .eq('message_type', 'direct')
     .or(`and(user_id.eq.${userId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${userId})`)
     .order('inserted_at', { ascending: false })
     .limit(50)
 
-  if (messagesError) throw messagesError
-
-  // Fetch thread messages separately if there are any messages
-  if (messages?.length) {
-    const messageIds = messages.map(m => m.id)
-    const { data: threadMessages, error: threadError } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        user:users(*),
-        reactions:message_reactions(*),
-        files:message_files(*),
-        mentions:message_mentions(*)
-      `)
-      .in('parent_message_id', messageIds)
-      .eq('message_type', 'thread')
-      .order('inserted_at', { ascending: true })
-
-    if (threadError) throw threadError
-
-    // Group thread messages by parent message
-    const threadMessagesByParent = threadMessages?.reduce((acc, tm) => {
-      if (!tm.parent_message_id) return acc
-      if (!acc[tm.parent_message_id]) {
-        acc[tm.parent_message_id] = []
-      }
-      acc[tm.parent_message_id].push(tm)
-      return acc
-    }, {} as Record<number, DbMessage[]>)
-
-    // Attach thread messages to their parent messages
-    return messages.map(message => ({
-      ...message,
-      thread_messages: threadMessagesByParent[message.id] || []
-    }))
-  }
-
+  if (error) throw error
   return messages || []
 }
 
-// Get reactions for a message
+export async function getDirectMessages(userId: string, otherUserId: string): Promise<DbMessage[]> {
+  const messages = await fetchDirectMessages(userId, otherUserId)
+
+  if (!messages.length) return []
+
+  // Fetch and attach thread messages
+  const messageIds = messages.map(m => m.id)
+  const threadMessages = await fetchThreadMessages(messageIds)
+  const threadMessagesByParent = groupThreadMessagesByParent(threadMessages)
+
+  // Attach thread messages to their parent messages
+  return messages.map(message => ({
+    ...message,
+    thread_messages: threadMessagesByParent[message.id] || []
+  }))
+}
+
+// Message Reactions
 export async function getMessageReactions(messageId: number): Promise<MessageReaction[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -156,5 +173,5 @@ export async function getMessageReactions(messageId: number): Promise<MessageRea
     .order('inserted_at', { ascending: true })
 
   if (error) throw error
-  return data
+  return data || []
 } 

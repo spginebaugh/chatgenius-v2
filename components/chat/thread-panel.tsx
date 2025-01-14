@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { SmileIcon } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
-import { useRealtimeMessages } from "@/lib/client/hooks/use-realtime-messages"
+import { useRealtimeMessages } from "@/lib/client/hooks/realtime-messages"
 import { useState } from "react"
 import { useUsersStore } from "@/lib/stores/users"
 

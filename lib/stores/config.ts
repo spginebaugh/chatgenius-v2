@@ -1,62 +1,92 @@
 import { create } from 'zustand'
 import { devtools, persist, PersistStorage, StorageValue } from 'zustand/middleware'
 
-// Create a type-safe store configuration
-export const createStore = <T extends object>(
+// Types
+interface StorageData<T> {
+  state: T
+  version?: string
+}
+
+interface CustomStorageOptions {
+  storage?: boolean
+  version?: string
+}
+
+// Storage Helpers
+function isValidVersion(data: StorageData<unknown>): boolean {
+  return !data.version || data.version === process.env.NEXT_PUBLIC_APP_VERSION
+}
+
+function parseStorageData<T>(str: string | null): StorageData<T> | null {
+  if (!str) return null
+  
+  try {
+    return JSON.parse(str)
+  } catch {
+    return null
+  }
+}
+
+function createStorageData<T>(value: StorageValue<T>): StorageData<T> {
+  return {
+    state: value.state,
+    version: process.env.NEXT_PUBLIC_APP_VERSION
+  }
+}
+
+// Custom Storage Implementation
+function createCustomStorage<T extends object>(): PersistStorage<T> | undefined {
+  if (typeof window === 'undefined') return undefined
+
+  return {
+    getItem: (name): StorageValue<T> | null => {
+      const data = parseStorageData<T>(sessionStorage.getItem(name))
+      
+      if (!data || !isValidVersion(data)) {
+        sessionStorage.removeItem(name)
+        return null
+      }
+      
+      return { state: data.state, version: 1 }
+    },
+    setItem: (name, value) => {
+      const data = createStorageData(value)
+      sessionStorage.setItem(name, JSON.stringify(data))
+    },
+    removeItem: (name) => sessionStorage.removeItem(name)
+  }
+}
+
+// Store Creation
+function createPersistConfig<T extends object>(name: string, storage?: boolean) {
+  return {
+    name,
+    storage: storage ? createCustomStorage<T>() : undefined
+  }
+}
+
+/**
+ * Creates a type-safe Zustand store with optional persistence
+ */
+export function createStore<T extends object>(
   initialState: T,
   name: string,
   storage = true
-) => {
-  const customStorage: PersistStorage<T> | undefined = typeof window !== 'undefined'
-    ? {
-        getItem: (name): StorageValue<T> | null => {
-          const str = sessionStorage.getItem(name)
-          if (!str) return null
-          try {
-            const data = JSON.parse(str)
-            // Clear old data if it's from a previous session
-            if (data.state && data.version !== process.env.NEXT_PUBLIC_APP_VERSION) {
-              sessionStorage.removeItem(name)
-              return null
-            }
-            return data
-          } catch {
-            return null
-          }
-        },
-        setItem: (name, value) => {
-          const data = {
-            ...value,
-            version: process.env.NEXT_PUBLIC_APP_VERSION
-          }
-          sessionStorage.setItem(name, JSON.stringify(data))
-        },
-        removeItem: (name) => sessionStorage.removeItem(name)
-      }
-    : undefined
-
+) {
   return create<T>()(
     devtools(
       persist(
-        () => ({
-          ...initialState
-        }),
-        {
-          name,
-          storage: storage ? customStorage : undefined
-        }
+        () => ({ ...initialState }),
+        createPersistConfig<T>(name, storage)
       )
     )
   )
 }
 
-// Type helper for store state
-export type StoreState<T> = T & {
-  // Add common store properties here if needed
-}
+// Type Helpers
+export type StoreState<T> = T
 
-// Type helper for store actions
-export type StoreActions<T> = {
+export interface StoreActions<T> {
   // Add common action types here if needed
   reset: () => void
 } 

@@ -61,7 +61,7 @@ We use Supabase subscriptions for real-time data:
 ```typescript
 import { useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { useMessagesStore } from '@/lib/stores/messages'
+import { useMessagesStore } from '@/lib/stores/messages/index'
 
 function useRealtimeMessages(channelId: string) {
   const { addMessage, deleteMessage } = useMessagesStore()

@@ -3,7 +3,7 @@
 import { createClient } from '@/app/_lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { requireAuth } from '@/app/_lib/auth'
-import { insertRecord, updateRecord, deleteRecord, selectRecords } from '@/app/_lib/supabase-helpers'
+import { insertRecord, updateRecord, deleteRecord, selectRecords } from '@/app/_lib/supabase'
 import type { Channel } from '@/types/database'
 
 interface CreateChannelProps {

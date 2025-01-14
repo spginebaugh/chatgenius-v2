@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useMessagesStore } from '@/lib/stores/messages'
-import { useRealtimeMessages } from '@/lib/client/hooks/use-realtime-messages'
+import { useMessagesStore } from '@/lib/stores/messages/index'
+import { useRealtimeMessages } from '@/lib/client/hooks/realtime-messages'
 import type { UiMessage } from '@/types/messages-ui'
 import type { DbMessage } from '@/types/database'
 

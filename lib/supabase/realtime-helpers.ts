@@ -1,66 +1,104 @@
 "use client"
 
 import { createClient } from './client'
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import type { RealtimePostgresChangesPayload, RealtimeChannel } from '@supabase/supabase-js'
 
-interface SetupSubscriptionProps<T extends Record<string, any>> {
+// Types
+interface SetupSubscriptionProps<T extends { [key: string]: any }> {
   table: string
   filter?: string
   onPayload: (payload: RealtimePostgresChangesPayload<T>) => void
 }
 
-export async function setupSubscription<T extends Record<string, any>>({ 
-  table, 
-  filter, 
-  onPayload 
-}: SetupSubscriptionProps<T>) {
+interface ChannelConfig {
+  channelName: string
+  table: string
+  filter?: string
+  userId?: string
+}
+
+// Helper functions
+async function getAuthenticatedUserId() {
   const supabase = createClient()
-
-  // Debug: Check auth status
   const { data: { session } } = await supabase.auth.getSession()
-  console.log('Setting up subscription with auth:', {
-    userId: session?.user?.id,
-    table,
-    filter
+  return session?.user?.id
+}
+
+function createChannelName({ table, userId }: { table: string, userId?: string }): string {
+  return `${table}_${userId || 'anonymous'}_${Date.now()}`
+}
+
+function logSubscriptionEvent<T extends { [key: string]: any }>(channelName: string, payload: RealtimePostgresChangesPayload<T>) {
+  console.log(`[${channelName}] Received postgres_changes event:`, {
+    event: payload.eventType,
+    new: payload.new,
+    old: payload.old
   })
+}
 
-  // Create a unique channel name including the user ID to avoid conflicts
-  const channelName = `${table}_${session?.user?.id}_${Date.now()}`
-  console.log('Creating channel:', channelName)
+async function verifyTableAccess(channelName: string, table: string) {
+  const supabase = createClient()
+  const { data: testData, error: testError } = await supabase
+    .from(table)
+    .select('*')
+    .limit(1)
 
-  const channel = supabase.channel(channelName)
+  console.log(`[${channelName}] Testing SELECT permission:`, {
+    success: !!testData,
+    error: testError?.message,
+    data: testData
+  })
+}
+
+function setupChannel<T extends { [key: string]: any }>({
+  channelName,
+  table,
+  filter,
+  onPayload
+}: ChannelConfig & Pick<SetupSubscriptionProps<T>, 'onPayload'>): RealtimeChannel {
+  const supabase = createClient()
+  
+  return supabase.channel(channelName)
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
       table,
       filter
     }, (payload: RealtimePostgresChangesPayload<T>) => {
-      console.log(`[${channelName}] Received postgres_changes event:`, {
-        event: payload.eventType,
-        table,
-        filter,
-        new: payload.new,
-        old: payload.old
-      })
+      logSubscriptionEvent(channelName, payload)
       onPayload(payload)
     })
-    .subscribe(async (status) => {
-      console.log(`[${channelName}] Subscription status:`, status)
+}
 
-      if (status === 'SUBSCRIBED') {
-        // Debug: Verify the subscription is working
-        const { data: testData, error: testError } = await supabase
-          .from(table)
-          .select('*')
-          .limit(1)
+// Main function
+export async function setupSubscription<T extends { [key: string]: any }>({ 
+  table, 
+  filter, 
+  onPayload 
+}: SetupSubscriptionProps<T>) {
+  const userId = await getAuthenticatedUserId()
+  const channelName = createChannelName({ table, userId })
 
-        console.log(`[${channelName}] Testing SELECT permission:`, {
-          success: !!testData,
-          error: testError?.message,
-          data: testData
-        })
-      }
-    })
+  console.log('Setting up subscription:', {
+    userId,
+    table,
+    filter,
+    channelName
+  })
+
+  const channel = setupChannel<T>({
+    channelName,
+    table,
+    filter,
+    onPayload
+  })
+
+  await channel.subscribe(async (status) => {
+    console.log(`[${channelName}] Subscription status:`, status)
+    if (status === 'SUBSCRIBED') {
+      await verifyTableAccess(channelName, table)
+    }
+  })
 
   return {
     unsubscribe: async () => {

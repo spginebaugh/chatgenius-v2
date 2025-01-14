@@ -5,7 +5,7 @@ import { createClient } from "@/app/_lib/supabase-server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { updateRecord, selectRecords } from '@/app/_lib/supabase-helpers';
+import { updateRecord, selectRecords } from '@/app/_lib/supabase';
 import type { User, Channel } from '@/types/database';
 
 export const signUpAction = async (formData: FormData) => {

@@ -3,7 +3,7 @@
 import { createClient } from '@/app/_lib/supabase-server'
 import { requireAuth } from '@/app/_lib/auth'
 import { revalidatePath } from 'next/cache'
-import { updateRecord } from '@/app/_lib/supabase-helpers'
+import { updateRecord } from '@/app/_lib/supabase'
 import type { User, UserStatus } from '@/types/database'
 
 interface UpdateUserProfileProps {

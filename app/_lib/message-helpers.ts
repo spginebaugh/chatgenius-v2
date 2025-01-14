@@ -1,5 +1,5 @@
 import { DbMessage as Message, MessageFile, MessageType } from '@/types/database'
-import { insertRecord } from './supabase-helpers'
+import { insertRecord } from './supabase'
 import { createClient } from '@/app/_lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 
