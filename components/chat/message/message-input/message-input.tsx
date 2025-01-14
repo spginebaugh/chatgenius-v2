@@ -3,11 +3,12 @@
 import React, { useState, useRef } from "react"
 import ContentEditable, { ContentEditableEvent } from "react-contenteditable"
 import TurndownService from "turndown"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ArrowUp } from "lucide-react"
-import { FileAttachment, THEME_COLORS, MESSAGE_INPUT_CONFIG } from "../../shared"
+import { THEME_COLORS, MESSAGE_INPUT_CONFIG } from "../../shared"
+import type { UiFileAttachment } from "@/types/messages-ui"
 import { FormattingToolbar } from "./formatting-toolbar"
 import { FileUpload } from "./file-upload"
 
@@ -18,21 +19,18 @@ const turndownService = new TurndownService({
 
 interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string, files?: FileAttachment[]) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[]) => Promise<void>
 }
 
 export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) {
   const [html, setHtml] = useState("")
   const [linkUrl, setLinkUrl] = useState("")
   const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<UiFileAttachment[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const contentEditableRef = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -52,33 +50,68 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Let the default behavior handle new line
+        document.execCommand('insertLineBreak')
+        e.preventDefault()
+        return
+      }
+      // Enter without shift sends the message
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
   const handleFileUpload = async (files: FileList) => {
     setIsUploading(true)
     try {
-      const newFiles: FileAttachment[] = []
+      const newFiles: UiFileAttachment[] = []
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
-        if (file.type.startsWith('image/')) {
-          const fileName = `${Date.now()}-${file.name}`
-          const { data, error } = await supabase.storage
-            .from('chat-attachments')
-            .upload(fileName, file)
+        console.log('File MIME type:', file.type)
+        const fileName = `${Date.now()}-${file.name}`
+        const { data, error } = await supabase.storage
+          .from('chat-attachments')
+          .upload(fileName, file)
 
-          if (error) {
-            toast.error(`Failed to upload ${file.name}`)
-            throw error
-          }
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('chat-attachments')
-            .getPublicUrl(fileName)
-
-          newFiles.push({
-            url: publicUrl,
-            type: 'image',
-            name: file.name
-          })
+        if (error) {
+          toast.error(`Failed to upload ${file.name}`)
+          throw error
         }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('chat-attachments')
+          .getPublicUrl(fileName)
+
+        // Determine file type based on MIME type
+        let fileType: 'image' | 'video' | 'audio' | 'document'
+        
+        console.log('Is image?', file.type.startsWith('image/'))
+        console.log('Full file object:', {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        })
+
+        if (file.type.startsWith('image/')) {
+          fileType = 'image'
+        } else if (file.type.startsWith('video/')) {
+          fileType = 'video'
+        } else if (file.type.startsWith('audio/')) {
+          fileType = 'audio'
+        } else {
+          fileType = 'document'
+        }
+
+        console.log('Determined fileType:', fileType)
+
+        newFiles.push({
+          url: publicUrl,
+          type: fileType,
+          name: file.name
+        })
       }
       setUploadedFiles(prev => [...prev, ...newFiles])
     } catch (error) {
@@ -86,13 +119,6 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
       toast.error("Failed to upload one or more files")
     } finally {
       setIsUploading(false)
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
     }
   }
 
@@ -122,9 +148,9 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
   }
 
   return (
-    <div className="sticky bottom-0 px-4 py-3 bg-white border-t border-gray-200">
+    <div className="p-4 border-t border-gray-200">
       <form onSubmit={handleSubmit}>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <FormattingToolbar
             linkUrl={linkUrl}
             setLinkUrl={setLinkUrl}
@@ -134,37 +160,37 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
             isUploading={isUploading}
             onFileInputClick={() => fileInputRef.current?.click()}
           />
-
-          <div className="relative flex flex-col gap-2">
-            <FileUpload
-              uploadedFiles={uploadedFiles}
-              onRemoveFile={(index) => setUploadedFiles(files => files.filter((_, i) => i !== index))}
-            />
-
-            <div className="flex items-end gap-2">
-              <div 
-                onKeyPress={handleKeyPress}
-                className="flex-1"
-              >
-                <ContentEditable
-                  innerRef={contentEditableRef}
-                  html={html}
-                  onChange={handleChange}
-                  onPaste={handlePaste}
-                  className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[${THEME_COLORS.primary}] focus:ring-1 focus:ring-[${THEME_COLORS.primary}]`}
-                  placeholder={placeholder}
-                  tagName="div"
-                />
-              </div>
-              <Button 
-                type="submit"
-                size="icon"
-                className={`h-10 w-10 rounded-full bg-[${THEME_COLORS.primary}] hover:bg-[${THEME_COLORS.primaryHover}] text-white shadow-md`}
-                disabled={isUploading}
-              >
-                <ArrowUp className="h-5 w-5" />
-              </Button>
+          <FileUpload
+            uploadedFiles={uploadedFiles}
+            onRemoveFile={(index) => {
+              const newFiles = [...uploadedFiles]
+              newFiles.splice(index, 1)
+              setUploadedFiles(newFiles)
+            }}
+          />
+          <div className="flex items-end gap-2">
+            <div 
+              className="flex-1"
+              onKeyDown={handleKeyDown}
+            >
+              <ContentEditable
+                innerRef={contentEditableRef}
+                html={html}
+                onChange={handleChange}
+                onPaste={handlePaste}
+                className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[${THEME_COLORS.primary}] focus:ring-1 focus:ring-[${THEME_COLORS.primary}]`}
+                placeholder={placeholder}
+                tagName="div"
+              />
             </div>
+            <Button 
+              type="submit"
+              size="icon"
+              className={`h-10 w-10 rounded-full bg-[${THEME_COLORS.primary}] hover:bg-[${THEME_COLORS.primaryHover}] text-white shadow-md`}
+              disabled={isUploading}
+            >
+              <ArrowUp className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       </form>
@@ -173,10 +199,10 @@ export function MessageInput({ placeholder, onSendMessage }: MessageInputProps) 
         type="file"
         ref={fileInputRef}
         className="hidden"
-        accept="image/*"
+        accept="*/*"
         multiple
         onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
       />
     </div>
   )
-} 
+}

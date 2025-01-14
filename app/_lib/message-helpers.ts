@@ -1,22 +1,17 @@
-import { DbMessage as Message, MessageFile, MessageType } from '@/types/database'
+import { DbMessage as Message, MessageFile, MessageType, FileType } from '@/types/database'
+import { UiFileAttachment, UiMessageReaction } from '@/types/messages-ui'
 import { insertRecord } from './supabase'
 import { createClient } from '@/app/_lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 
-export interface FileAttachment {
-  url: string
-  type: string
-  name: string
-}
-
 interface MessageBase {
   message: string
-  files?: FileAttachment[]
+  files?: UiFileAttachment[]
 }
 
 interface HandleFileAttachmentsProps {
   messageId: number
-  files: FileAttachment[]
+  files: UiFileAttachment[]
   userId: string
 }
 
@@ -58,7 +53,9 @@ async function handleFileAttachments({
   const fileRecords = files.map(file => ({
     message_id: messageId,
     file_url: file.url,
-    file_type: 'document' as const,
+    file_type: (file.type === 'image' ? 'image' : 
+                file.type === 'video' ? 'video' :
+                file.type === 'audio' ? 'audio' : 'document') as FileType,
     inserted_at: new Date().toISOString()
   }))
 

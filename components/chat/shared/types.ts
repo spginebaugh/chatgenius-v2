@@ -1,36 +1,28 @@
-import { User, Channel, MessageFile, MessageReaction, UserStatus } from "@/types/database"
-import { UiMessage, UiMessageReaction } from "@/types/messages-ui"
+import type { UiMessage } from '@/types/messages-ui'
+import type { User, Channel } from '@/types/database'
 
-export interface FileAttachment {
-  url: string
-  type: 'image' | 'video' | 'audio' | 'document'
-  name: string
-}
-
-// Base message type without thread_messages to avoid recursion
-export interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
-  profiles: {
-    id: string
-    username: string
-    profile_picture_url?: string | null
-    status?: UserStatus
-  }
-  files?: MessageFile[]
-  reactions?: UiMessageReaction[]
-}
-
-// Message type with thread messages
-export interface ThreadMessage extends BaseMessage {
-  thread_messages?: ThreadMessage[]
-}
+// Re-export component-specific types from messages-ui.ts
+export type { MessageProps } from '@/types/messages-ui'
 
 export interface ChatViewData {
   type: 'channel' | 'dm'
   data: Channel | User
 }
 
-export interface MessageProps {
-  message: ThreadMessage
-  onEmojiSelect?: (messageId: number, emoji: string) => Promise<void>
-  onThreadClick?: (message: ThreadMessage) => void
+// Component-specific types that aren't message-related
+export interface ChatLayoutProps {
+  children: React.ReactNode
+  sidebar?: React.ReactNode
+  header?: React.ReactNode
+}
+
+export interface ChatHeaderProps {
+  title: string
+  subtitle?: string
+  actions?: React.ReactNode
+}
+
+export interface ChatSidebarProps {
+  isOpen: boolean
+  onClose: () => void
 } 

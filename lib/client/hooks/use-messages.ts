@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import type { DbMessage, MessageReaction } from '@/types/database'
-import type { UiMessage } from '@/types/messages-ui'
+import type { DbMessage, MessageReaction, UserStatus } from '@/types/database'
+import type { UiMessage, UiProfile } from '@/types/messages-ui'
 import { createClient } from '@/lib/supabase/client'
 
 interface UseMessagesProps {
@@ -82,11 +82,15 @@ function formatReactions(reactions: MessageReaction[] = [], currentUserId: strin
 function formatMessage({ message, currentUserId }: FormatMessageParams): UiMessage {
   return {
     ...message,
-    profiles: message.user || {
-      id: message.user_id,
-      username: 'Unknown'
+    message: message.message || '',
+    profiles: {
+      id: message.user?.id || message.user_id,
+      username: message.user?.username || 'Unknown',
+      profile_picture_url: null,
+      status: 'OFFLINE'
     },
     reactions: formatReactions(message.reactions, currentUserId),
+    files: [],
     thread_messages: [],
     thread_count: 0
   }

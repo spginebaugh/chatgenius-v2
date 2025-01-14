@@ -1,33 +1,27 @@
 import { createClient } from '@/app/_lib/supabase-server'
-import type { DbMessage, MessageFile, MessageReaction } from '@/types/database'
-import type { UiMessage } from '@/types/messages-ui'
+import type { DbMessage, MessageFile, MessageReaction, UserStatus } from '@/types/database'
+import type { UiMessage, UiMessageReaction } from '@/types/messages-ui'
 
-// Types
-interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
-  profiles: {
-    id: string
-    username: string
-  }
-  files?: MessageFile[]
-  reactions?: Array<{
-    emoji: string
-    count: number
-    reacted_by_me: boolean
-  }>
-}
-
-interface DisplayMessage extends BaseMessage {
-  thread_messages?: DisplayMessage[]
-}
-
+/**
+ * Intermediate type representing a message with its joined relations from the database.
+ * Extends DbMessage with explicitly nullable joined data.
+ * - profiles: null when join fails or user deleted
+ * - files: null when not yet loaded
+ * - reactions: null when not yet loaded
+ */
 interface MessageWithJoins extends DbMessage {
   profiles: {
     id: string
     username: string | null
-  } | null
-  files: MessageFile[] | null
-  reactions: MessageReaction[] | null
+    profile_picture_url: string | null
+    status: UserStatus | null
+  } | null // null when join fails or user deleted
+  files: MessageFile[] | null // null when not loaded
+  reactions: MessageReaction[] | null // null when not loaded
 }
+
+// Type without thread_messages to avoid recursion in certain operations
+type NoThreadMessage = Omit<UiMessage, 'thread_messages'>
 
 // Query Constants
 const BASE_MESSAGE_QUERY = `
@@ -42,17 +36,20 @@ const BASE_MESSAGE_QUERY = `
 
 const THREAD_MESSAGE_QUERY = `
   *,
-  user:users(*),
-  reactions:message_reactions(*),
+  profiles:users!messages_user_id_fkey(
+    id,
+    username
+  ),
   files:message_files(*),
+  reactions:message_reactions(*),
   mentions:message_mentions(*)
 `
 
 // Reaction Formatting
-function groupReactionsByEmoji(reactions: MessageReaction[] | null): Map<string, Set<string>> {
+function groupReactionsByEmoji(reactions: MessageReaction[]): Map<string, Set<string>> {
   const reactionsByEmoji = new Map<string, Set<string>>()
   
-  if (!reactions) return reactionsByEmoji
+  if (!reactions?.length) return reactionsByEmoji
 
   reactions.forEach(reaction => {
     if (!reactionsByEmoji.has(reaction.emoji)) {
@@ -64,28 +61,50 @@ function groupReactionsByEmoji(reactions: MessageReaction[] | null): Map<string,
   return reactionsByEmoji
 }
 
-function formatReactions(reactions: MessageReaction[] | null): DisplayMessage['reactions'] {
-  if (!reactions) return []
+function formatReactions(reactions: MessageReaction[], currentUserId?: string): UiMessageReaction[] {
+  if (!reactions?.length) return []
   
   const reactionsByEmoji = groupReactionsByEmoji(reactions)
 
   return Array.from(reactionsByEmoji.entries()).map(([emoji, users]) => ({
     emoji,
     count: users.size,
-    reacted_by_me: false // We don't have currentUserId on server
+    reacted_by_me: currentUserId ? users.has(currentUserId) : false
   }))
 }
 
 // Message Formatting
-function formatMessageForDisplay(message: MessageWithJoins): DisplayMessage {
+/**
+ * Formats a database message with joins into a UI-friendly format.
+ * Handles null values and provides defaults for UI rendering.
+ */
+async function formatMessageForDisplay(message: MessageWithJoins, currentUserId?: string): Promise<UiMessage> {
+  const supabase = await createClient()
+
   return {
-    ...message,
+    id: message.id,
+    message: message.message || '', // Convert null to empty string
+    message_type: message.message_type,
+    user_id: message.user_id,
+    channel_id: message.channel_id,
+    receiver_id: message.receiver_id,
+    parent_message_id: message.parent_message_id,
+    thread_count: message.thread_count,
+    inserted_at: message.inserted_at,
+    // Format profile with defaults
     profiles: {
-      id: message.profiles?.id || '',
-      username: message.profiles?.username || 'Unknown'
+      id: message.profiles?.id || message.user_id,
+      username: message.profiles?.username || 'Unknown',
+      profile_picture_url: message.profiles?.profile_picture_url || null,
+      status: message.profiles?.status || 'OFFLINE'
     },
-    reactions: formatReactions(message.reactions),
-    files: message.files || [],
+    // Convert null arrays to empty arrays
+    reactions: formatReactions(message.reactions || [], currentUserId),
+    files: (message.files || []).map(file => ({
+      url: file.file_url,  // Use the stored URL directly
+      type: file.file_type,
+      name: file.file_url.split('/').pop() || 'file'
+    })),
     thread_messages: [] // Initialize empty thread messages array
   }
 }
@@ -116,7 +135,7 @@ function groupThreadMessagesByParent(threadMessages: DbMessage[]): Record<number
 }
 
 // Channel Messages
-export async function getChannelMessages(channelId: number): Promise<DisplayMessage[]> {
+export async function getChannelMessages(channelId: number): Promise<UiMessage[]> {
   const supabase = await createClient()
   
   const { data: messages, error } = await supabase
@@ -128,7 +147,10 @@ export async function getChannelMessages(channelId: number): Promise<DisplayMess
   if (error) throw error
   if (!messages) return []
 
-  return (messages as MessageWithJoins[]).map(message => formatMessageForDisplay(message))
+  const formattedMessages = await Promise.all(
+    (messages as MessageWithJoins[]).map(message => formatMessageForDisplay(message))
+  )
+  return formattedMessages
 }
 
 // Direct Messages
@@ -146,7 +168,7 @@ async function fetchDirectMessages(userId: string, otherUserId: string) {
   return messages || []
 }
 
-export async function getDirectMessages(userId: string, otherUserId: string): Promise<DbMessage[]> {
+export async function getDirectMessages(userId: string, otherUserId: string): Promise<UiMessage[]> {
   const messages = await fetchDirectMessages(userId, otherUserId)
 
   if (!messages.length) return []
@@ -156,11 +178,20 @@ export async function getDirectMessages(userId: string, otherUserId: string): Pr
   const threadMessages = await fetchThreadMessages(messageIds)
   const threadMessagesByParent = groupThreadMessagesByParent(threadMessages)
 
-  // Attach thread messages to their parent messages
-  return messages.map(message => ({
-    ...message,
-    thread_messages: threadMessagesByParent[message.id] || []
-  }))
+  // Format messages and attach thread messages
+  const formattedMessages = await Promise.all(
+    messages.map(async message => {
+      const formattedMessage = await formatMessageForDisplay(message as MessageWithJoins)
+      formattedMessage.thread_messages = await Promise.all(
+        (threadMessagesByParent[message.id] || []).map(tm => 
+          formatMessageForDisplay(tm as MessageWithJoins)
+        )
+      )
+      return formattedMessage
+    })
+  )
+
+  return formattedMessages
 }
 
 // Message Reactions

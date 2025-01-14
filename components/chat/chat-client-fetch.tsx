@@ -4,8 +4,8 @@ import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useMessagesStore } from '@/lib/stores/messages/index'
 import { useRealtimeMessages } from '@/lib/client/hooks/realtime-messages'
-import type { ThreadMessage } from './shared'
 import type { User, MessageReaction } from '@/types/database'
+import type { UiMessage } from '@/types/messages-ui'
 
 interface ChatClientFetchProps {
   currentUser: Pick<User, 'id'>
@@ -87,7 +87,7 @@ export function ChatClientFetch({
       }
 
       // Format messages for UI
-      const formattedMessages: ThreadMessage[] = messages.map(message => ({
+      const formattedMessages: UiMessage[] = messages.map(message => ({
         ...message,
         profiles: message.profiles || {
           id: message.user_id,

@@ -3,34 +3,24 @@
 import { createClient } from '@/app/_lib/supabase-server'
 import { requireAuth } from '@/app/_lib/auth'
 import { insertRecord } from '@/app/_lib/supabase'
-import type { DbMessage, MessageType, MessageFile } from '@/types/database'
-import type { FileAttachment } from '@/app/_lib/message-helpers'
+import type { DbMessage, MessageType, MessageFile, FileType } from '@/types/database'
+import type { UiFileAttachment } from '@/types/messages-ui'
+import type { MessageData } from '@/app/actions/messages/types'
 import { revalidatePath } from 'next/cache'
 
 // Types
 interface SendMessageProps {
   message: string
-  files?: FileAttachment[]
+  files?: UiFileAttachment[]
   channelId?: number
   receiverId?: string
   parentMessageId?: number
 }
 
-interface MessageData {
-  message: string
-  message_type: MessageType
-  user_id: string
-  channel_id?: number
-  receiver_id?: string
-  parent_message_id?: number
-  thread_count: number
-  inserted_at: string
-}
-
 interface FileData {
   message_id: number
   file_url: string
-  file_type: 'document'
+  file_type: FileType
   inserted_at: string
 }
 
@@ -53,24 +43,24 @@ function createMessageData(props: SendMessageProps, userId: string): MessageData
     message: props.message,
     message_type: determineMessageType(props),
     user_id: userId,
-    channel_id: props.channelId,
-    receiver_id: props.receiverId,
-    parent_message_id: props.parentMessageId,
+    channel_id: props.channelId || null,
+    receiver_id: props.receiverId || null,
+    parent_message_id: props.parentMessageId || null,
     thread_count: 0,
     inserted_at: new Date().toISOString()
   }
 }
 
-function createFileData(messageId: number, file: FileAttachment): FileData {
+function createFileData(messageId: number, file: UiFileAttachment): FileData {
   return {
     message_id: messageId,
     file_url: file.url,
-    file_type: 'document',
+    file_type: file.type,
     inserted_at: new Date().toISOString()
   }
 }
 
-async function insertMessageFiles(files: FileAttachment[], messageId: number, revalidatePath?: string) {
+async function insertMessageFiles(files: UiFileAttachment[], messageId: number, revalidatePath?: string) {
   const fileRecords = files.map(file => createFileData(messageId, file))
   
   // Insert first file

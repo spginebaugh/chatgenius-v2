@@ -1,31 +1,32 @@
+"use client"
+
 import { signUpAction } from "@/app/actions";
-import { FormMessage, Message } from "@/components/form-message";
+import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { SmtpMessage } from "../smtp-message";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default async function Signup(props: {
-  searchParams: Promise<Message>;
-}) {
-  const searchParams = await props.searchParams;
-  if ("message" in searchParams) {
+export default function Signup() {
+  const searchParams = useSearchParams();
+  const [message, setMessage] = useState(searchParams.get("message"));
+
+  useEffect(() => {
+    setMessage(searchParams.get("message"));
+  }, [searchParams]);
+
+  if (message) {
     return (
       <div className="w-full flex-1 flex items-center h-screen sm:max-w-md justify-center gap-2 p-4">
-        <FormMessage message={searchParams} />
+        <FormMessage message={{ message }} />
       </div>
     );
   }
 
-  // Create a wrapper function that returns void
-  async function handleSignUp(formData: FormData) {
-    await signUpAction(formData);
-  }
-
   return (
     <div className="flex flex-col items-center justify-center w-full">
-      <form className="w-full max-w-sm">
+      <form action={signUpAction} className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-center text-[#BF5700] mb-8">Welcome to ChatGenius</h1>
         
         <div className="space-y-4">
@@ -52,7 +53,6 @@ export default async function Signup(props: {
           </div>
 
           <SubmitButton 
-            formAction={handleSignUp} 
             pendingText="Signing up..."
             className="w-full bg-[#BF5700] hover:bg-[#A64A00] text-white mt-4"
           >
@@ -68,7 +68,7 @@ export default async function Signup(props: {
             </p>
           </div>
 
-          <FormMessage message={searchParams} />
+          {message && <FormMessage message={{ message }} />}
         </div>
       </form>
     </div>

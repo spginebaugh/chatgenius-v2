@@ -6,9 +6,19 @@ import { useMessagesStore } from '@/lib/stores/messages/index'
 import type { UseRealtimeMessagesParams, SubscriptionContext } from './types'
 import { cleanupSubscriptions, initializeSubscriptionContext } from './subscription-handlers'
 import { formatReactions } from '@/lib/stores/messages/utils'
-import type { MessageReaction, DbMessage } from '@/types/database'
-import type { UiMessage } from '@/types/messages-ui'
+import type { MessageReaction, DbMessage, UserStatus, MessageFile } from '@/types/database'
+import type { UiMessage, UiProfile } from '@/types/messages-ui'
 import { createClient } from '@/lib/supabase/client'
+
+// Helper function to create a valid UiProfile
+function createUiProfile(profile: any | null, userId: string): UiProfile {
+  return {
+    id: profile?.id || userId,
+    username: profile?.username || 'Unknown User',
+    profile_picture_url: profile?.profile_picture_url || null,
+    status: (profile?.status as UserStatus) || 'OFFLINE'
+  }
+}
 
 export function useRealtimeMessages({
   channelId,
@@ -27,21 +37,46 @@ export function useRealtimeMessages({
   const supabase = createClient()
 
   const convertToUiMessage = async (dbMessage: DbMessage): Promise<UiMessage> => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', dbMessage.user_id)
+    // Fetch the complete message with joins
+    const { data: messageWithJoins } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        profiles:users!messages_user_id_fkey(
+          id,
+          username,
+          profile_picture_url,
+          status
+        ),
+        files:message_files(*),
+        reactions:message_reactions(*)
+      `)
+      .eq('id', dbMessage.id)
       .single()
 
+    if (!messageWithJoins) {
+      // Fallback if joins fail
+      return {
+        ...dbMessage,
+        message: dbMessage.message || '',
+        profiles: createUiProfile(null, dbMessage.user_id),
+        reactions: [],
+        files: [],
+        thread_messages: []
+      }
+    }
+
+    // Format the message with all its relations
     return {
-      ...dbMessage,
-      profiles: profile || {
-        id: dbMessage.user_id,
-        username: 'Unknown User',
-        status: 'OFFLINE'
-      },
-      reactions: [],
-      files: [],
+      ...messageWithJoins,
+      message: messageWithJoins.message || '',
+      profiles: createUiProfile(messageWithJoins.profiles, messageWithJoins.user_id),
+      reactions: formatReactions(messageWithJoins.reactions || [], currentUserIdRef.current || ''),
+      files: ((messageWithJoins.files || []) as MessageFile[]).map(file => ({
+        url: file.file_url,
+        type: file.file_type,
+        name: file.file_url.split('/').pop() || 'file'
+      })),
       thread_messages: []
     }
   }

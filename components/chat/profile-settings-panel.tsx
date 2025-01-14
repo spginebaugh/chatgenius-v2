@@ -14,7 +14,7 @@ interface ProfileSettingsPanelProps {
 
 function PanelHeader({ onClose }: { onClose: () => void }) {
   return (
-    <div className={`h-14 bg-[${THEME_COLORS.headerBg}] flex items-center justify-between px-4`}>
+    <div className="h-14 bg-[#333F48] flex items-center justify-between px-4">
       <div className="text-white font-semibold">Profile Settings</div>
       <button 
         onClick={onClose}

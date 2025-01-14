@@ -71,7 +71,7 @@ function DirectMessageList({ users, currentView }: { users: User[], currentView:
 
 export function Sidebar({ channels, storeUsers, currentView }: SidebarProps) {
   return (
-    <div className={`w-64 bg-[${THEME_COLORS.headerBg}] flex flex-col`}>
+    <div className="w-64 bg-[#333F48] flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <ChannelList channels={channels} currentView={currentView} />
         <DirectMessageList users={storeUsers} currentView={currentView} />

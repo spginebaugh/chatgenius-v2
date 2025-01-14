@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { FileAttachment } from "@/app/_lib/message-helpers"
+import type { UiMessage, UiFileAttachment } from "@/types/messages-ui"
 import { Sidebar } from "."
 import { MessageList } from "./message/message-list"
 import { MessageInput } from "./message/message-input"
@@ -11,15 +11,15 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { ProfileSettingsPanel } from "./profile-settings-panel"
-import { ThreadMessage, ChatViewData, UserAvatar, THEME_COLORS } from "./shared"
+import { ChatViewData, UserAvatar, THEME_COLORS } from "./shared"
 import type { User, Channel } from "@/types/database"
 
 interface ChatLayoutProps {
   currentUser: User
   users: User[]
   channels: Channel[]
-  messages: ThreadMessage[]
-  onSendMessage: (message: string, files?: FileAttachment[]) => Promise<void>
+  messages: UiMessage[]
+  onSendMessage: (message: string, files?: UiFileAttachment[]) => Promise<void>
   onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
   initialView: ChatViewData
 }
@@ -34,7 +34,7 @@ export function ChatLayout({
   initialView
 }: ChatLayoutProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [selectedMessage, setSelectedMessage] = useState<ThreadMessage | null>(null)
+  const [selectedMessage, setSelectedMessage] = useState<UiMessage | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -68,7 +68,7 @@ export function ChatLayout({
     }
   }
 
-  const handleThreadClick = (message: ThreadMessage) => {
+  const handleThreadClick = (message: UiMessage) => {
     setSelectedMessage(message)
   }
 
@@ -99,7 +99,7 @@ export function ChatLayout({
         currentView={initialView}
       />
       <div className="flex-1 flex flex-col min-w-0 bg-white">
-        <div className={`h-14 bg-[${THEME_COLORS.headerBg}] flex items-center justify-between px-4 flex-shrink-0`}>
+        <div className="h-14 bg-[#333F48] flex items-center justify-between px-4 flex-shrink-0">
           <div className="text-white font-semibold">
             {initialView.type === 'channel' ? (
               <span>#{(initialView.data as Channel).slug}</span>

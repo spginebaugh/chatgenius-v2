@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/app/_lib/supabase-server"
 import { ChatClient } from "@/components/chat"
 import { DbMessage as Message, Channel, User, MessageReaction, MessageType, MessageFile, UserStatus } from "@/types/database"
-import { UiMessage } from "@/types/messages-ui"
+import { UiMessage, UiMessageReaction } from "@/types/messages-ui"
 import { requireAuth } from '@/app/_lib/auth'
 import { getChannels, getUsers } from '@/app/_lib'
 
@@ -11,26 +11,8 @@ interface ChatServerProps {
   id: string
 }
 
-// Base message type without thread_messages to avoid recursion
-interface BaseMessage extends Omit<UiMessage, 'thread_messages' | 'profiles'> {
-  profiles: {
-    id: string
-    username: string
-    profile_picture_url?: string
-    status?: UserStatus
-  }
-  files?: MessageFile[]
-  reactions?: Array<{
-    emoji: string
-    count: number
-    reacted_by_me: boolean
-  }>
-}
-
-// Message type with thread messages
-type DisplayMessage = BaseMessage & {
-  thread_messages?: DisplayMessage[]
-}
+// Type without thread_messages to avoid recursion in certain operations
+type NoThreadMessage = Omit<UiMessage, 'thread_messages'>
 
 const MESSAGE_QUERY = `
   id,
@@ -105,7 +87,7 @@ async function fetchCurrentUser(userId: string) {
   return currentUser
 }
 
-function formatReactionsForDisplay(reactions: MessageReaction[], currentUserId: string) {
+function formatReactionsForDisplay(reactions: MessageReaction[], currentUserId: string): UiMessageReaction[] {
   const reactionsByEmoji = new Map<string, Set<string>>()
   
   reactions.forEach(reaction => {
@@ -122,7 +104,7 @@ function formatReactionsForDisplay(reactions: MessageReaction[], currentUserId: 
   }))
 }
 
-function formatMessage(msg: any, currentUserId: string): DisplayMessage {
+function formatMessage(msg: any, currentUserId: string): UiMessage {
   return {
     id: msg.id,
     message: msg.message,

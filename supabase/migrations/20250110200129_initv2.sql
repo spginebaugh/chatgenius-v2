@@ -338,9 +338,13 @@ create policy "Users can delete their own reactions"
   to authenticated
   using (auth.uid() = user_id);
 
--- Realtime
-alter publication supabase_realtime add table public.messages;
-alter publication supabase_realtime add table public.message_reactions;
-alter publication supabase_realtime add table public.message_mentions;
-alter publication supabase_realtime add table public.message_files;
-alter publication supabase_realtime add table public.users;
+-- Drop existing realtime configuration
+drop publication if exists supabase_realtime;
+
+-- Create new realtime publication with all tables except role_permissions, user_roles, and channels
+create publication supabase_realtime for table 
+  public.messages,
+  public.message_reactions,
+  public.message_mentions,
+  public.message_files,
+  public.users;

@@ -3,7 +3,8 @@
 import { createClient } from '@/app/_lib/supabase-server'
 import { requireAuth } from '@/app/_lib/auth'
 import type { MessageData, HandleMessageProps } from './types'
-import type { DbMessage } from '@/types/database'
+import type { DbMessage, FileType } from '@/types/database'
+import type { UiMessage } from '@/types/messages-ui'
 
 const MESSAGE_SELECT_QUERY = `
   *,
@@ -84,21 +85,16 @@ async function insertMessage(messageData: MessageData) {
 
 async function processFileAttachment(params: {
   messageId: number
-  file: { type: string; url: string }
+  file: { type: FileType; url: string }
 }) {
   const { messageId, file } = params
   const supabase = await createClient()
   
-  let fileType: 'image' | 'video' | 'audio' | 'document' = 'document'
-  if (file.type === 'image') fileType = 'image'
-  else if (file.type === 'video') fileType = 'video'
-  else if (file.type === 'audio') fileType = 'audio'
-
   const { data: fileData, error: fileError } = await supabase
     .from('message_files')
     .insert({
       message_id: messageId,
-      file_type: fileType,
+      file_type: file.type,
       file_url: file.url,
       inserted_at: new Date().toISOString()
     })

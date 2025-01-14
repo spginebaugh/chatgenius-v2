@@ -1,14 +1,16 @@
-import type { FileAttachment } from '@/app/_lib/message-helpers'
+import type { UiFileAttachment } from '@/types/messages-ui'
 import type { MessageType } from '@/types/database'
 
+// Request payload for sending a new message
 export interface HandleMessageProps {
   message: string
-  files?: FileAttachment[]
+  files?: UiFileAttachment[]
   channelId?: number
   receiverId?: string
   parentMessageId?: number
 }
 
+// Internal message data structure for server actions
 export interface MessageData {
   message: string
   message_type: MessageType
@@ -20,7 +22,14 @@ export interface MessageData {
   inserted_at: string
 }
 
+// Request payload for adding a reaction
 export interface AddReactionProps {
+  messageId: number
+  emoji: string
+}
+
+// Request payload for removing a reaction
+export interface RemoveReactionProps {
   messageId: number
   emoji: string
 } 

@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useState, useCallback, memo } from "react"
 import type { User, Channel, DbMessage, UserStatus, MessageReaction } from "@/types/database"
-import type { UiMessageReaction } from "@/types/messages-ui"
-import { FileAttachment } from "@/app/_lib/message-helpers"
+import type { UiMessage, UiMessageReaction, UiFileAttachment, UiProfile } from "@/types/messages-ui"
 import { ChatLayout } from "./chat-layout"
 import { useMessagesStore } from "@/lib/stores/messages/index"
 import { useChannelsStore } from "@/lib/stores/channels"
@@ -15,7 +14,7 @@ import { addEmojiReaction } from "@/app/actions/messages"
 import { handleMessage } from "@/app/actions/messages/index"
 import { createClient } from "@/lib/supabase/client"
 import { ChatClientFetch } from "./chat-client-fetch"
-import { ThreadMessage, ChatViewData } from "./shared"
+import { ChatViewData } from "./shared"
 import { formatReactions } from "@/lib/stores/messages/utils"
 
 interface ChatClientProps {
@@ -23,7 +22,17 @@ interface ChatClientProps {
   currentUser: User
   channels: Channel[]
   users: User[]
-  initialMessages: ThreadMessage[]
+  initialMessages: UiMessage[]
+}
+
+// Helper function to create a valid UiProfile
+function createUiProfile(user: User | undefined, fallbackId: string): UiProfile {
+  return {
+    id: user?.id || fallbackId,
+    username: user?.username || 'Unknown',
+    profile_picture_url: user?.profile_picture_url || null,
+    status: user?.status || 'OFFLINE'
+  }
 }
 
 function ChatClientComponent({ initialView, currentUser, channels, users, initialMessages }: ChatClientProps) {
@@ -76,14 +85,9 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
         })
 
         // Create the base message with user info
-        const mappedMessage: ThreadMessage = {
+        const mappedMessage: UiMessage = {
           ...msg,
-          profiles: {
-            id: user?.id || msg.user_id,
-            username: user?.username || '',
-            status: user?.status,
-            profile_picture_url: user?.profile_picture_url
-          },
+          profiles: createUiProfile(user, msg.user_id),
           files: msg.files || [],
           reactions: msg.reactions || []
         }
@@ -96,15 +100,10 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
               const threadUser = storeUsers.find(u => u.id === threadMsg.user_id)
               return {
                 ...threadMsg,
-                profiles: {
-                  id: threadUser?.id || threadMsg.user_id,
-                  username: threadUser?.username || '',
-                  status: threadUser?.status,
-                  profile_picture_url: threadUser?.profile_picture_url
-                },
+                profiles: createUiProfile(threadUser, threadMsg.user_id),
                 files: threadMsg.files || [],
                 reactions: threadMsg.reactions || []
-              }
+              } as UiMessage
             })
           }
         }
@@ -129,7 +128,7 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
           acc[parentId].push(msg)
         }
         return acc
-      }, {} as Record<number, ThreadMessage[]>)
+      }, {} as Record<number, UiMessage[]>)
 
       // Set each thread's messages in the store
       Object.entries(threadsByParent).forEach(([parentId, messages]) => {
@@ -169,14 +168,10 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
     // Always process the message if it doesn't exist or if it's more recent
     if (!existingMessage || new Date(message.inserted_at) > new Date(existingMessage.inserted_at)) {
       const user = storeUsers.find(u => u.id === message.user_id)
-      const displayMessage: ThreadMessage = {
+      const displayMessage: UiMessage = {
         ...message,
-        profiles: {
-          id: user?.id || '',
-          username: user?.username || 'Unknown',
-          status: user?.status,
-          profile_picture_url: user?.profile_picture_url
-        },
+        message: message.message || '', // Convert null to empty string
+        profiles: createUiProfile(user, message.user_id),
         files: [],
         reactions: existingMessage?.reactions || []
       }
@@ -192,14 +187,10 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
   const handleMessageUpdate = useCallback((message: DbMessage) => {
     console.log("Realtime message update:", message)
     const user = storeUsers.find(u => u.id === message.user_id)
-    const displayMessage: ThreadMessage = {
+    const displayMessage: UiMessage = {
       ...message,
-      profiles: {
-        id: user?.id || message.user_id,
-        username: user?.username || 'Unknown',
-        profile_picture_url: user?.profile_picture_url,
-        status: user?.status
-      },
+      message: message.message || '', // Convert null to empty string
+      profiles: createUiProfile(user, message.user_id),
       files: [],
       reactions: []
     }
@@ -237,7 +228,7 @@ function ChatClientComponent({ initialView, currentUser, channels, users, initia
     }
   })
 
-  const handleSendMessage = async (message: string, files?: FileAttachment[]) => {
+  const handleSendMessage = async (message: string, files?: UiFileAttachment[]) => {
     try {
       await handleMessage({
         message,

@@ -1,26 +1,19 @@
 "use server";
 
 import { encodedRedirect } from "@/lib/utils";
-import { createClient } from "@/app/_lib/supabase-server";
+import { createServerClient } from "@/app/_lib/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { updateRecord, selectRecords } from '@/app/_lib/supabase';
 import type { User, Channel } from '@/types/database';
 
-export const signUpAction = async (formData: FormData) => {
-  const email = formData.get("email")?.toString();
-  const password = formData.get("password")?.toString();
-  const supabase = await createClient();
-  const origin = (await headers()).get("origin");
+export async function signUpAction(formData: FormData) {
+  const email = formData.get("email") as string
+  const password = formData.get("password") as string
+  const origin = (await headers()).get("origin")
 
-  if (!email || !password) {
-    return encodedRedirect(
-      "error",
-      "/sign-up",
-      "Email and password are required",
-    );
-  }
+  const supabase = await createServerClient()
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -28,19 +21,14 @@ export const signUpAction = async (formData: FormData) => {
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
     },
-  });
+  })
 
   if (error) {
-    console.error(error.code + " " + error.message);
-    return encodedRedirect("error", "/sign-up", error.message);
-  } else {
-    return encodedRedirect(
-      "success",
-      "/sign-up",
-      "Thanks for signing up! Please check your email for a verification link.",
-    );
+    redirect(`/sign-up?message=${encodeURIComponent(error.message)}`)
   }
-};
+
+  redirect("/sign-in?message=Check your email to confirm your account")
+}
 
 export const signInAction = async (formData: FormData) => {
   console.log('[SignInAction] Starting sign-in process');
@@ -48,7 +36,7 @@ export const signInAction = async (formData: FormData) => {
   const password = formData.get("password") as string;
   console.log('[SignInAction] Email:', email);
 
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   console.log('[SignInAction] Supabase client created');
 
   const { error, data } = await supabase.auth.signInWithPassword({
@@ -119,7 +107,7 @@ export const signInAction = async (formData: FormData) => {
 
 export const forgotPasswordAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const origin = (await headers()).get("origin");
   const callbackUrl = formData.get("callbackUrl")?.toString();
 
@@ -152,7 +140,7 @@ export const forgotPasswordAction = async (formData: FormData) => {
 };
 
 export const resetPasswordAction = async (formData: FormData) => {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -189,7 +177,7 @@ export const resetPasswordAction = async (formData: FormData) => {
 };
 
 export const signOutAction = async () => {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -225,7 +213,7 @@ export const signOutAction = async () => {
 };
 
 export async function logout() {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -262,7 +250,7 @@ export async function logout() {
 }
 
 export async function updateUsername(newUsername: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {

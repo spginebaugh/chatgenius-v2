@@ -1,30 +1,72 @@
 "use client"
 
+import { useState, useCallback, useEffect } from "react"
 import { MessageInput } from "./message/message-input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { SmileIcon } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
 import { useRealtimeMessages } from "@/lib/client/hooks/realtime-messages"
-import { useState } from "react"
 import { EMOJI_LIST, UserAvatar, MessageTime, THEME_COLORS } from "./shared"
-import type { ThreadMessage } from "./shared"
-import type { MessageReaction, DbMessage } from "@/types/database"
+import type { MessageReaction, UserStatus, DbMessage, MessageFile } from "@/types/database"
+import type { UiMessage, UiMessageReaction, UiFileAttachment } from "@/types/messages-ui"
+import { createClient } from "@/lib/supabase/client"
+import { formatReactions } from "@/lib/stores/messages/utils"
 
 interface ThreadPanelProps {
-  parentMessage: ThreadMessage
+  parentMessage: UiMessage
   currentUserId: string
   onSendMessage: (message: string) => Promise<void>
   onClose: () => void
   onEmojiSelect: (messageId: number, emoji: string) => void
 }
 
-function useThreadMessages(parentMessage: ThreadMessage) {
-  const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>(
+function useThreadMessages(parentMessage: UiMessage, currentUserId: string) {
+  const [threadMessages, setThreadMessages] = useState<UiMessage[]>(
     parentMessage.thread_messages || []
   )
+  const supabase = createClient()
 
-  const addOrUpdateMessage = (message: ThreadMessage) => {
+  // Helper to fetch and format a complete message
+  const fetchAndFormatMessage = async (messageId: number): Promise<UiMessage | null> => {
+    const { data: messageWithJoins } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        profiles:users!messages_user_id_fkey(
+          id,
+          username,
+          profile_picture_url,
+          status
+        ),
+        files:message_files(*),
+        reactions:message_reactions(*)
+      `)
+      .eq('id', messageId)
+      .single()
+
+    if (!messageWithJoins) return null
+
+    return {
+      ...messageWithJoins,
+      message: messageWithJoins.message || '',
+      profiles: {
+        id: messageWithJoins.profiles?.id || messageWithJoins.user_id,
+        username: messageWithJoins.profiles?.username || 'Unknown',
+        profile_picture_url: messageWithJoins.profiles?.profile_picture_url || null,
+        status: messageWithJoins.profiles?.status || 'OFFLINE'
+      },
+      reactions: formatReactions(messageWithJoins.reactions || [], currentUserId),
+      files: ((messageWithJoins.files || []) as MessageFile[]).map(file => ({
+        url: file.file_url,
+        type: file.file_type,
+        name: file.file_url.split('/').pop() || 'file'
+      })),
+      thread_messages: []
+    }
+  }
+
+  const addOrUpdateMessage = useCallback(async (message: DbMessage) => {
     if (
       message.parent_message_id !== parentMessage.id ||
       message.message_type !== 'thread'
@@ -32,18 +74,21 @@ function useThreadMessages(parentMessage: ThreadMessage) {
       return
     }
 
+    const formattedMessage = await fetchAndFormatMessage(message.id)
+    if (!formattedMessage) return
+
     setThreadMessages(prev => {
       const exists = prev.some(m => m.id === message.id)
       if (exists) {
-        return prev.map(m => m.id === message.id ? message : m)
+        return prev.map(m => m.id === message.id ? formattedMessage : m)
       }
-      return [...prev, message].sort((a, b) => 
+      return [...prev, formattedMessage].sort((a, b) => 
         new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime()
       )
     })
-  }
+  }, [parentMessage.id, currentUserId])
 
-  const deleteMessage = (message: ThreadMessage) => {
+  const deleteMessage = useCallback((message: DbMessage) => {
     if (
       message.parent_message_id !== parentMessage.id ||
       message.message_type !== 'thread'
@@ -51,9 +96,9 @@ function useThreadMessages(parentMessage: ThreadMessage) {
       return
     }
     setThreadMessages(prev => prev.filter(msg => msg.id !== message.id))
-  }
+  }, [parentMessage.id])
 
-  const updateMessage = (message: ThreadMessage) => {
+  const updateMessage = useCallback(async (message: DbMessage) => {
     if (
       message.parent_message_id !== parentMessage.id ||
       message.message_type !== 'thread'
@@ -61,41 +106,36 @@ function useThreadMessages(parentMessage: ThreadMessage) {
       return
     }
 
-    setThreadMessages(prev => prev.map(msg => {
-      if (msg.id !== message.id) return msg
-      return {
-        ...msg,
-        ...message,
-        files: msg.files || message.files,
-        reactions: msg.reactions || message.reactions
-      }
-    }))
-  }
-
-  const updateReactions = (messageId: number, reactions: MessageReaction[], currentUserId: string) => {
-    const reactionsByEmoji = reactions.reduce((acc: Record<string, { emoji: string; userIds: Set<string> }>, reaction) => {
-      if (!acc[reaction.emoji]) {
-        acc[reaction.emoji] = {
-          emoji: reaction.emoji,
-          userIds: new Set()
-        }
-      }
-      acc[reaction.emoji].userIds.add(reaction.user_id)
-      return acc
-    }, {})
-
-    const displayReactions = Object.values(reactionsByEmoji).map(({ emoji, userIds }) => ({
-      emoji,
-      count: userIds.size,
-      reacted_by_me: userIds.has(currentUserId)
-    }))
+    const formattedMessage = await fetchAndFormatMessage(message.id)
+    if (!formattedMessage) return
 
     setThreadMessages(prev => prev.map(msg => 
+      msg.id === message.id ? formattedMessage : msg
+    ))
+  }, [parentMessage.id, currentUserId])
+
+  const updateReactions = useCallback((messageId: number, reactions: MessageReaction[]) => {
+    setThreadMessages(prev => prev.map(msg => 
       msg.id === messageId 
-        ? { ...msg, reactions: displayReactions }
+        ? { ...msg, reactions: formatReactions(reactions, currentUserId) }
         : msg
     ))
-  }
+  }, [currentUserId])
+
+  // Initialize thread messages with formatted data
+  useEffect(() => {
+    const initializeThreadMessages = async () => {
+      if (!parentMessage.thread_messages?.length) return
+
+      const formattedMessages = await Promise.all(
+        parentMessage.thread_messages.map(msg => fetchAndFormatMessage(msg.id))
+      )
+
+      setThreadMessages(formattedMessages.filter((msg): msg is UiMessage => msg !== null))
+    }
+
+    initializeThreadMessages()
+  }, [parentMessage.thread_messages])
 
   return {
     threadMessages,
@@ -106,22 +146,22 @@ function useThreadMessages(parentMessage: ThreadMessage) {
   }
 }
 
-function MessageFiles({ files }: { files?: ThreadMessage['files'] }) {
+function MessageFiles({ files }: { files?: UiFileAttachment[] }) {
   if (!files?.length) return null
 
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {files.map((file, index) => (
-        file.file_type === 'image' && (
+        file.type === 'image' && (
           <a 
             key={index} 
-            href={file.file_url} 
+            href={file.url} 
             target="_blank" 
             rel="noopener noreferrer"
             className="block"
           >
             <img 
-              src={file.file_url} 
+              src={file.url} 
               alt="Attached image"
               className="max-h-60 rounded-lg object-cover shadow-sm hover:shadow-md transition-shadow"
             />
@@ -133,7 +173,7 @@ function MessageFiles({ files }: { files?: ThreadMessage['files'] }) {
 }
 
 function MessageReactions({ message, onEmojiSelect }: { 
-  message: ThreadMessage
+  message: UiMessage
   onEmojiSelect?: (messageId: number, emoji: string) => void 
 }) {
   if (!message.reactions?.length) return null
@@ -193,14 +233,14 @@ function EmojiButton({ messageId, onEmojiSelect }: {
 }
 
 function ThreadMessage({ message, onEmojiSelect }: {
-  message: ThreadMessage
+  message: UiMessage
   onEmojiSelect: (messageId: number, emoji: string) => void
 }) {
   return (
     <div className="flex items-start gap-3 group">
       <UserAvatar 
         username={message.profiles?.username}
-        status={message.profiles?.status as any}
+        status={message.profiles?.status as UserStatus}
       />
       <div className="flex-1">
         <div className="flex items-baseline gap-2 mb-1">
@@ -222,7 +262,7 @@ function ThreadMessage({ message, onEmojiSelect }: {
 
 function ThreadHeader({ onClose }: { onClose: () => void }) {
   return (
-    <div className={`h-14 bg-[${THEME_COLORS.headerBg}] flex items-center justify-between px-4`}>
+    <div className="h-14 bg-[#333F48] flex items-center justify-between px-4">
       <div className="text-white font-semibold">Thread</div>
       <button 
         onClick={onClose}
@@ -247,15 +287,14 @@ export function ThreadPanel({
     deleteMessage,
     updateMessage,
     updateReactions
-  } = useThreadMessages(parentMessage)
+  } = useThreadMessages(parentMessage, currentUserId)
 
   useRealtimeMessages({
     parentMessageId: parentMessage.id,
-    onNewMessage: (message: DbMessage) => addOrUpdateMessage(message as unknown as ThreadMessage),
-    onMessageDelete: (message: DbMessage) => deleteMessage(message as unknown as ThreadMessage),
-    onMessageUpdate: (message: DbMessage) => updateMessage(message as unknown as ThreadMessage),
-    onReactionUpdate: (messageId, reactions) => 
-      updateReactions(messageId, reactions, currentUserId)
+    onNewMessage: (message: DbMessage) => addOrUpdateMessage(message),
+    onMessageDelete: (message: DbMessage) => deleteMessage(message),
+    onMessageUpdate: (message: DbMessage) => updateMessage(message),
+    onReactionUpdate: (messageId, reactions) => updateReactions(messageId, reactions)
   })
 
   return (
