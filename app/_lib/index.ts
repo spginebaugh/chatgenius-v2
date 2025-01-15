@@ -1,11 +1,24 @@
-// Re-export channel queries
-export * from './fetch-channels'
+// Core utilities
+export {
+  insertRecord,
+  updateRecord,
+  deleteRecord
+} from './supabase'
 
-// Re-export user queries
-export * from './fetch-users'
+export {
+  requireAuth,
+  checkAuth
+} from './auth'
 
-// Re-export message queries
-export * from './message-queries'
+// Domain-specific exports
+export {
+  getChannels
+} from './fetch-channels'
 
-// Re-export message mutations
-export * from './message-mutations' 
+export {
+  getUsers,
+  getCurrentUser
+} from './fetch-users'
+
+// Message operations are exported from their own module
+export * from './messages' 

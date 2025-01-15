@@ -1,4 +1,5 @@
-import { getChannels, getUsers, getCurrentUser, getChannelMessages } from '@/app/_lib'
+import { getChannels, getUsers, getCurrentUser } from '@/app/_lib'
+import { getChannelMessages } from '@/app/_lib/messages'
 import { ChatClient } from '@/components/chat/chat-client'
 import { redirect } from 'next/navigation'
 

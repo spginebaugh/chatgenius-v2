@@ -1,20 +1,33 @@
 "use client"
 
+// Imports
+// -----------------------------------------------
 import Link from "next/link"
-import { Channel, User } from "@/types/database"
-import { THEME_COLORS } from "./shared"
+
+// Types
+// -----------------------------------------------
+import type { Channel, User } from "@/types/database"
+import type { SidebarProps } from "./shared/types"
+
+// Components
+// -----------------------------------------------
 import { UserAvatar } from "./shared"
 
-interface SidebarProps {
+// Internal Types
+// -----------------------------------------------
+interface ChannelListProps {
   channels: Channel[]
-  storeUsers: User[]
-  currentView: {
-    type: 'channel' | 'dm'
-    data: Channel | User
-  }
+  currentView: SidebarProps['currentView']
 }
 
-function ChannelList({ channels, currentView }: { channels: Channel[], currentView: SidebarProps['currentView'] }) {
+interface DirectMessageListProps {
+  users: User[]
+  currentView: SidebarProps['currentView']
+}
+
+// UI Components
+// -----------------------------------------------
+function ChannelList({ channels, currentView }: ChannelListProps) {
   return (
     <div className="px-3 py-4">
       <h2 className="text-white font-semibold mb-2">Channels</h2>
@@ -39,7 +52,7 @@ function ChannelList({ channels, currentView }: { channels: Channel[], currentVi
   )
 }
 
-function DirectMessageList({ users, currentView }: { users: User[], currentView: SidebarProps['currentView'] }) {
+function DirectMessageList({ users, currentView }: DirectMessageListProps) {
   return (
     <div className="px-3 py-4">
       <h2 className="text-white font-semibold mb-2">Direct Messages</h2>
@@ -69,6 +82,8 @@ function DirectMessageList({ users, currentView }: { users: User[], currentView:
   )
 }
 
+// Main Component
+// -----------------------------------------------
 export function Sidebar({ channels, storeUsers, currentView }: SidebarProps) {
   return (
     <div className="w-64 bg-[#333F48] flex flex-col">

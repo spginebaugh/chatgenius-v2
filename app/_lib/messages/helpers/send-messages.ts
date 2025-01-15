@@ -1,18 +1,12 @@
-import { DbMessage as Message, MessageFile, MessageType, FileType } from '@/types/database'
-import { UiFileAttachment, UiMessageReaction } from '@/types/messages-ui'
-import { insertRecord } from './supabase'
-import { createClient } from '@/app/_lib/supabase-server'
+import { DbMessage as Message } from '@/types/database'
+import { UiFileAttachment } from '@/types/messages-ui'
+import { insertRecord } from '../../supabase'
 import { revalidatePath } from 'next/cache'
+import { handleFileAttachments } from './file-attachments'
 
 interface MessageBase {
   message: string
   files?: UiFileAttachment[]
-}
-
-interface HandleFileAttachmentsProps {
-  messageId: number
-  files: UiFileAttachment[]
-  userId: string
 }
 
 interface SendChannelMessageProps extends MessageBase {
@@ -28,52 +22,6 @@ interface SendDirectMessageProps extends MessageBase {
 interface SendThreadMessageProps extends MessageBase {
   parentId: number
   userId: string
-}
-
-interface FormatMessageProps {
-  message: Message
-}
-
-interface FormatReactionsProps {
-  reactions: Array<{
-    emoji: string
-    user_id: string
-  }>
-  currentUserId: string
-}
-
-/**
- * Handles file attachments for messages
- */
-async function handleFileAttachments({
-  messageId,
-  files,
-  userId
-}: HandleFileAttachmentsProps) {
-  const fileRecords = files.map(file => ({
-    message_id: messageId,
-    file_url: file.url,
-    file_type: (file.type === 'image' ? 'image' : 
-                file.type === 'video' ? 'video' :
-                file.type === 'audio' ? 'audio' : 'document') as FileType,
-    inserted_at: new Date().toISOString()
-  }))
-
-  // Insert first file using our helper
-  await insertRecord<MessageFile>({
-    table: 'message_files',
-    data: fileRecords[0],
-    options: {
-      revalidatePath: '/channel/[id]'
-    }
-  })
-
-  // Insert remaining files if any
-  if (fileRecords.length > 1) {
-    const supabase = await createClient()
-    const { error } = await supabase.from('message_files').insert(fileRecords.slice(1))
-    if (error) throw error
-  }
 }
 
 /**
@@ -92,7 +40,7 @@ export async function sendChannelMessage({
       channel_id: channelId,
       user_id: userId,
       message,
-      message_type: 'channel' as MessageType,
+      message_type: 'channel',
       inserted_at: new Date().toISOString()
     },
     select: 'id',
@@ -129,7 +77,7 @@ export async function sendDirectMessage({
       user_id: userId,
       receiver_id: receiverId,
       message,
-      message_type: 'direct' as MessageType,
+      message_type: 'direct',
       inserted_at: new Date().toISOString()
     },
     select: 'id',
@@ -166,7 +114,7 @@ export async function sendThreadMessage({
       parent_message_id: parentId,
       user_id: userId,
       message,
-      message_type: 'thread' as MessageType,
+      message_type: 'thread',
       inserted_at: new Date().toISOString()
     },
     select: 'id',
@@ -192,45 +140,4 @@ export async function sendThreadMessage({
   revalidatePath('/messages/[id]')  // If you have a dedicated message view
   
   return messageData
-}
-
-/**
- * Formats a message for display
- */
-export function formatMessageForDisplay({ message }: FormatMessageProps) {
-  if (!message) {
-    return {
-      id: 0,
-      message: '',
-      inserted_at: new Date().toISOString(),
-    }
-  }
-
-  return {
-    id: message.id || 0,
-    message: message.message || '',
-    inserted_at: message.inserted_at || new Date().toISOString(),
-  }
-}
-
-/**
- * Formats reactions for a message
- */
-export function formatReactions({ reactions, currentUserId }: FormatReactionsProps) {
-  // Group reactions by emoji
-  const reactionsByEmoji = new Map<string, Set<string>>()
-  
-  reactions.forEach(reaction => {
-    if (!reactionsByEmoji.has(reaction.emoji)) {
-      reactionsByEmoji.set(reaction.emoji, new Set())
-    }
-    reactionsByEmoji.get(reaction.emoji)!.add(reaction.user_id)
-  })
-
-  // Format reactions for display
-  return Array.from(reactionsByEmoji.entries()).map(([emoji, users]) => ({
-    emoji,
-    count: users.size,
-    reacted_by_me: users.has(currentUserId)
-  }))
 } 

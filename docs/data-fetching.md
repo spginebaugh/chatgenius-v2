@@ -11,9 +11,7 @@ Our application uses a hybrid approach to data fetching, leveraging both Server 
 Server components can directly import query functions from the appropriate module:
 
 ```typescript
-import { getChannelMessages } from '@/app/_lib'
-// or import specific functions from their modules
-import { getChannelMessages } from '@/app/_lib/message-queries'
+import { getChannelMessages, getDirectMessages, getMessageReactions } from '@/app/_lib/messages'
 ```
 
 Available queries are organized by domain:
@@ -25,16 +23,13 @@ Available queries are organized by domain:
   - `getUsers()`
   - `getCurrentUser()`
 
-- Message queries (`message-queries.ts`):
-  - `getChannelMessages(channelId)`
-  - `getDirectMessages(userId, otherUserId)`
-  - `getMessageReactions(messageId)`
-
-- Message mutations (`message-mutations.ts`):
-  - `sendMessage(message)`
-  - `toggleReaction(messageId, emoji)`
-  - `addFileToMessage(messageId, fileUrl, fileType)`
-  - `addMentionToMessage(messageId, mentionedUserId)`
+- Message queries (`messages/`):
+  - `getChannelMessages(channelId)`: Fetch messages for a channel
+  - `getDirectMessages(userId, otherUserId)`: Fetch direct messages between users
+  - `getMessageReactions(messageId)`: Fetch reactions for a message
+  - `sendChannelMessage(params)`: Send a message to a channel
+  - `sendDirectMessage(params)`: Send a direct message
+  - `sendThreadMessage(params)`: Send a thread message
 
 ### Error Handling
 

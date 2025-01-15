@@ -132,3 +132,8 @@ Conduct a comprehensive audit of the codebase to ensure adherence to DRY (Don't 
 - Regular updates will be added to track progress
 - Additional tasks may be added based on findings
 - Priority will be given to high-impact, low-risk changes 
+
+- [x] Create modular message operations structure:
+  - [x] `app/_lib/messages/helpers/` for basic message operations
+  - [x] `app/_lib/messages/queries/` for database operations
+  - [x] `app/_lib/messages/client/` for client-side utilities 

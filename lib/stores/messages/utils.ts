@@ -102,7 +102,7 @@ function updateReactionGroup(
   currentUserId: string
 ): ReactionGroup {
   return {
-    ...group,
+    emoji: group.emoji,
     count: group.count + 1,
     reacted_by_me: group.reacted_by_me || userId === currentUserId
   }
@@ -125,5 +125,9 @@ function groupReactionsByEmoji(
 
 export function formatReactions(reactions: MessageReaction[], currentUserId: string): UiMessageReaction[] {
   const reactionGroups = groupReactionsByEmoji(reactions, currentUserId)
-  return Array.from(reactionGroups.values())
+  return Array.from(reactionGroups.values()).map(group => ({
+    emoji: group.emoji,
+    count: group.count,
+    reacted_by_me: group.reacted_by_me
+  }))
 } 

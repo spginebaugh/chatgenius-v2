@@ -17,21 +17,54 @@ function isValidVersion(data: StorageData<unknown>): boolean {
   return !data.version || data.version === process.env.NEXT_PUBLIC_APP_VERSION
 }
 
-function parseStorageData<T>(str: string | null): StorageData<T> | null {
+function safeJSONParse<T>(str: string | null): T | null {
   if (!str) return null
   
   try {
     return JSON.parse(str)
   } catch {
+    console.warn('[Storage] Failed to parse stored data:', { str })
     return null
   }
 }
 
-function createStorageData<T>(value: StorageValue<T>): StorageData<T> {
-  return {
+function safeJSONStringify(data: unknown): string {
+  try {
+    // Use a replacer function to handle circular references
+    const seen = new WeakSet()
+    return JSON.stringify(data, (key, value) => {
+      // Handle non-object values
+      if (typeof value !== 'object' || value === null) {
+        return value
+      }
+      
+      // Handle circular references
+      if (seen.has(value)) {
+        console.warn('[Storage] Circular reference detected:', { key })
+        return '[Circular]'
+      }
+      seen.add(value)
+      
+      return value
+    })
+  } catch (error) {
+    console.error('[Storage] Failed to stringify data:', error)
+    return JSON.stringify({ error: 'Failed to serialize data' })
+  }
+}
+
+function parseStorageData<T>(str: string | null): StorageData<T> | null {
+  return safeJSONParse<StorageData<T>>(str)
+}
+
+function createStorageData<T>(value: StorageValue<T>): string {
+  // Create storage data object with only serializable data
+  const data: StorageData<T> = {
     state: value.state,
     version: process.env.NEXT_PUBLIC_APP_VERSION
   }
+  
+  return safeJSONStringify(data)
 }
 
 // Custom Storage Implementation
@@ -40,20 +73,35 @@ function createCustomStorage<T extends object>(): PersistStorage<T> | undefined 
 
   return {
     getItem: (name): StorageValue<T> | null => {
-      const data = parseStorageData<T>(sessionStorage.getItem(name))
-      
-      if (!data || !isValidVersion(data)) {
-        sessionStorage.removeItem(name)
+      try {
+        const data = parseStorageData<T>(sessionStorage.getItem(name))
+        
+        if (!data || !isValidVersion(data)) {
+          sessionStorage.removeItem(name)
+          return null
+        }
+        
+        return { state: data.state, version: 1 }
+      } catch (error) {
+        console.error('[Storage] Failed to get item:', error)
         return null
       }
-      
-      return { state: data.state, version: 1 }
     },
     setItem: (name, value) => {
-      const data = createStorageData(value)
-      sessionStorage.setItem(name, JSON.stringify(data))
+      try {
+        const serializedData = createStorageData(value)
+        sessionStorage.setItem(name, serializedData)
+      } catch (error) {
+        console.error('[Storage] Failed to set item:', error)
+      }
     },
-    removeItem: (name) => sessionStorage.removeItem(name)
+    removeItem: (name) => {
+      try {
+        sessionStorage.removeItem(name)
+      } catch (error) {
+        console.error('[Storage] Failed to remove item:', error)
+      }
+    }
   }
 }
 

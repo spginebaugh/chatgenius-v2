@@ -10,7 +10,7 @@ export async function fetchFullMessage(messageId: number) {
     .from('messages')
     .select(`
       *,
-      profiles:user_id(
+      profiles:users!messages_user_id_fkey(
         id,
         username,
         profile_picture_url,
@@ -19,7 +19,7 @@ export async function fetchFullMessage(messageId: number) {
       reactions:message_reactions(*),
       thread_messages:messages!parent_message_id(
         *,
-        profiles:user_id(
+        profiles:users!messages_user_id_fkey(
           id,
           username,
           profile_picture_url,
@@ -68,19 +68,23 @@ export function formatMessageForUi(messageData: any): UiMessage {
 }
 
 export function isMessageInContext(messageData: any, context: SubscriptionContext): boolean {
-  if (context.channelId && messageData.channel_id === context.channelId) {
-    return true
+  // Check channel messages
+  if (context.channelId) {
+    return messageData.channel_id === context.channelId && 
+           messageData.message_type === 'channel'
   }
   
-  if (context.receiverId && context.currentUserId && (
-    (messageData.user_id === context.receiverId && messageData.receiver_id === context.currentUserId) ||
-    (messageData.user_id === context.currentUserId && messageData.receiver_id === context.receiverId)
-  )) {
-    return true
+  // Check direct messages
+  if (context.receiverId && context.currentUserId) {
+    return messageData.message_type === 'direct' && (
+      (messageData.sender_id === context.receiverId && messageData.receiver_id === context.currentUserId) ||
+      (messageData.sender_id === context.currentUserId && messageData.receiver_id === context.receiverId)
+    )
   }
   
-  if (context.parentMessageId && messageData.parent_message_id === context.parentMessageId) {
-    return true
+  // Check thread messages
+  if (context.parentMessageId) {
+    return messageData.parent_message_id === context.parentMessageId
   }
   
   return false

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { User, UserStatus } from '@/types/database';
@@ -14,14 +14,17 @@ interface PresenceRefs {
   cleanupListenerRef: React.MutableRefObject<(() => void) | null>;
 }
 
+// Create a single client instance to be shared
+const supabaseClient = createClient();
+
 async function updateUserStatus({
   userId,
   status,
-  supabase
+  supabase = supabaseClient // Default to shared client
 }: {
   userId: string;
   status: UserStatus;
-  supabase: ReturnType<typeof createClient>;
+  supabase?: ReturnType<typeof createClient>;
 }) {
   try {
     await supabase
@@ -38,11 +41,11 @@ async function updateUserStatus({
 
 function setupVisibilityListener({
   userId,
-  supabase,
+  supabase = supabaseClient, // Default to shared client
   setStatus
 }: {
   userId: string;
-  supabase: ReturnType<typeof createClient>;
+  supabase?: ReturnType<typeof createClient>;
   setStatus: (status: UserStatus) => void;
 }) {
   const handleVisibilityChange = async () => {
@@ -58,24 +61,31 @@ function setupVisibilityListener({
 }
 
 function cleanupPresence(refs: PresenceRefs) {
-  refs.subscriptionRef.current?.unsubscribe();
-  refs.subscriptionRef.current = null;
-  refs.cleanupListenerRef.current?.();
-  refs.cleanupListenerRef.current = null;
+  if (refs.subscriptionRef.current) {
+    refs.subscriptionRef.current.unsubscribe();
+    refs.subscriptionRef.current = null;
+  }
+  if (refs.cleanupListenerRef.current) {
+    refs.cleanupListenerRef.current();
+    refs.cleanupListenerRef.current = null;
+  }
 }
 
 async function setupPresenceSubscription({
   userId,
-  supabase,
+  supabase = supabaseClient, // Default to shared client
   setStatus,
   refs
 }: {
   userId: string;
-  supabase: ReturnType<typeof createClient>;
+  supabase?: ReturnType<typeof createClient>;
   setStatus: (status: UserStatus) => void;
   refs: PresenceRefs;
 }) {
   try {
+    // Clean up any existing subscriptions first
+    cleanupPresence(refs);
+
     // Set initial status to ONLINE
     await updateUserStatus({ userId, status: 'ONLINE', supabase });
 
@@ -100,19 +110,19 @@ async function setupPresenceSubscription({
 
 export function useOnlineStatus({ userId }: UseOnlineStatusProps) {
   const [status, setStatus] = useState<UserStatus>('OFFLINE');
-  const subscriptionRef = useRef<RealtimeChannel | null>(null);
-  const cleanupListenerRef = useRef<(() => void) | null>(null);
-  const supabase = createClient();
+  
+  // Create stable refs
+  const refs = useMemo<PresenceRefs>(() => ({
+    subscriptionRef: { current: null },
+    cleanupListenerRef: { current: null }
+  }), []);
 
+  // Setup presence subscription
   useEffect(() => {
-    const refs: PresenceRefs = {
-      subscriptionRef,
-      cleanupListenerRef
-    };
+    if (!userId) return;
 
     setupPresenceSubscription({
       userId,
-      supabase,
       setStatus,
       refs
     }).catch(error => {
@@ -120,7 +130,7 @@ export function useOnlineStatus({ userId }: UseOnlineStatusProps) {
     });
 
     return () => cleanupPresence(refs);
-  }, [userId, supabase]);
+  }, [userId, refs]); // Only depend on userId and stable refs
 
   return status;
 } 
