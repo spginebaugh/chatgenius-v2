@@ -6,15 +6,11 @@ import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
 
-export default function Signup() {
+function SignUpContent() {
   const searchParams = useSearchParams();
-  const [message, setMessage] = useState(searchParams.get("message"));
-
-  useEffect(() => {
-    setMessage(searchParams.get("message"));
-  }, [searchParams]);
+  const message = searchParams.get("message");
 
   if (message) {
     return (
@@ -72,5 +68,13 @@ export default function Signup() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function SignUp() {
+  return (
+    <Suspense>
+      <SignUpContent />
+    </Suspense>
   );
 }
