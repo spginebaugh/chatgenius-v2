@@ -24,19 +24,24 @@ export const BASE_MESSAGE_QUERY = `
   *,
   profiles:users!messages_user_id_fkey(
     user_id,
-    username
+    username,
+    profile_picture_url,
+    status
   ),
   files:message_files(*),
-  reactions:message_reactions(*)
+  reactions:message_reactions(*),
+  mentions:message_mentions(*)
 `
 
 export const THREAD_MESSAGE_QUERY = `
   *,
   profiles:users!messages_user_id_fkey(
     user_id,
-    username
+    username,
+    profile_picture_url,
+    status
   ),
   files:message_files(*),
   reactions:message_reactions(*),
   mentions:message_mentions(*)
-` 
+`

@@ -372,6 +372,22 @@ create policy "Users can delete their own message files"
     and user_id = auth.uid()
   ));
 
+-- Drop RLS policies for messages and message_files
+drop policy if exists "Users can view messages in their channels" on public.messages;
+drop policy if exists "Users can view direct messages they sent or received" on public.messages;
+drop policy if exists "Users can insert messages" on public.messages;
+drop policy if exists "Users can update their own messages" on public.messages;
+drop policy if exists "Users can delete their own messages" on public.messages;
+
+drop policy if exists "Users can view message files" on public.message_files;
+drop policy if exists "Users can insert message files" on public.message_files;
+drop policy if exists "Users can update their own message files" on public.message_files;
+drop policy if exists "Users can delete their own message files" on public.message_files;
+
+-- Disable RLS on messages and message_files
+alter table public.messages disable row level security;
+alter table public.message_files disable row level security;
+
 -- Drop existing realtime configuration
 drop publication if exists supabase_realtime;
 

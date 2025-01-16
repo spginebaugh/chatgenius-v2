@@ -33,8 +33,14 @@ export async function processFile(
       break
       
     case 'txt':
+    case 'md':
       text = Buffer.from(file).toString('utf-8')
       break
+      
+    case 'doc':
+    case 'docx':
+      // Note: For doc/docx support, we'll need to add mammoth.js or similar library
+      throw new Error('DOC/DOCX support coming soon')
       
     default:
       throw new Error(`Unsupported file type: ${fileType}`)

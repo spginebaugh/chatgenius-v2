@@ -29,7 +29,10 @@ async function setupAllSubscriptions(
   messageHandlers: ReturnType<typeof createMessageHandlers>,
   reactionHandlers: ReturnType<typeof createReactionHandlers>
 ) {
-  setupMessageSubscription({
+  console.debug('[Realtime] Setting up all subscriptions:', context)
+
+  // Setup message subscription first and await it
+  await setupMessageSubscription({
     context,
     refs,
     messageKey: context.storeKey,
@@ -37,51 +40,68 @@ async function setupAllSubscriptions(
     ...messageHandlers
   })
 
-  setupReactionSubscription({
+  // Only setup reaction subscription after message subscription is established
+  await setupReactionSubscription({
     context,
     refs,
     messageKey: context.storeKey,
     messageType: context.messageType,
     ...reactionHandlers
   })
+
+  console.debug('[Realtime] All subscriptions setup complete')
 }
 
 export function useSubscriptionSetup({
   refs,
   params,
-  mountedRef,
   setRealtimeMessages,
   callbacks
 }: {
   refs: SubscriptionRefs
   params: ReturnType<typeof useSubscriptionParams>
-  mountedRef: React.MutableRefObject<boolean>
   setRealtimeMessages: React.Dispatch<React.SetStateAction<UiMessage[]>>
   callbacks: MessageCallbacks
 }) {
-  const messageHandlers = useMemo(() => createMessageHandlers(setRealtimeMessages), [setRealtimeMessages])
-  const reactionHandlers = useMemo(() => createReactionHandlers(setRealtimeMessages), [setRealtimeMessages])
+  const messageHandlers = useMemo(() => 
+    createMessageHandlers(setRealtimeMessages),
+    [setRealtimeMessages]
+  )
 
-  const setupSubscriptions = useMemo(() => async () => {
-    if (!mountedRef.current) return
-
-    const context = await initializeSubscriptionContext({
-      ...params.current,
-      refs
-    })
-
-    if (!context) return
-
-    await setupAllSubscriptions(
-      context,
-      refs,
-      messageHandlers,
-      reactionHandlers
-    )
-  }, [messageHandlers, reactionHandlers, mountedRef])
+  const reactionHandlers = useMemo(() => 
+    createReactionHandlers(setRealtimeMessages),
+    [setRealtimeMessages]
+  )
 
   useEffect(() => {
-    setupSubscriptions()
-    return () => cleanupSubscriptions(refs)
-  }, [setupSubscriptions])
+    let mounted = true
+    let setupPromise: Promise<void> | null = null
+    
+    async function initAndSetupSubscriptions() {
+      try {
+        console.debug('[Realtime] Initializing subscription context')
+        const context = await initializeSubscriptionContext({ ...params, refs })
+        if (!mounted || !context) return
+        
+        console.debug('[Realtime] Context initialized, setting up subscriptions')
+        await setupAllSubscriptions(context, refs, messageHandlers, reactionHandlers)
+        console.debug('[Realtime] Subscriptions setup complete')
+      } catch (error) {
+        console.error('[Realtime] Error setting up subscriptions:', error)
+      }
+    }
+
+    setupPromise = initAndSetupSubscriptions()
+    
+    return () => {
+      mounted = false
+      if (setupPromise) {
+        setupPromise.finally(() => {
+          if (!mounted) {
+            cleanupSubscriptions(refs)
+          }
+        })
+      }
+    }
+  }, [params, refs, messageHandlers, reactionHandlers])
 } 

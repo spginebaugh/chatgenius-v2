@@ -50,7 +50,7 @@ export async function updateChannel({ channelId, name }: UpdateChannelProps) {
     data: {
       slug: name.toLowerCase().replace(/\s+/g, '-')
     },
-    match: { id: channelId },
+    match: { channel_id: channelId },
     options: {
       revalidatePath: '/channel/[id]',
       errorMap: {
@@ -68,7 +68,7 @@ export async function deleteChannel({ channelId }: DeleteChannelProps) {
 
   await deleteRecord<Channel>({
     table: 'channels',
-    match: { id: channelId },
+    match: { channel_id: channelId },
     options: {
       revalidatePath: '/channel/[id]',
       errorMap: {

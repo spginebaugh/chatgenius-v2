@@ -27,7 +27,7 @@ interface ReactionHandlers {
   updateReactions: (type: MessageType, key: string | number, messageId: number, reactions: MessageReaction[]) => void
 }
 
-function createSubscriptionConfig(messageType: MessageType, messageKey: string | number): SubscriptionConfig {
+function createSubscriptionConfig(messageType: MessageType, messageKey: string | number, context: SubscriptionContext): SubscriptionConfig {
   // Special handling for thread type
   if (messageType === 'threads') {
     return {
@@ -42,8 +42,8 @@ function createSubscriptionConfig(messageType: MessageType, messageKey: string |
     return {
       channelPrefix: `messages-dm-${messageKey}`,
       table: 'messages',
-      // messageKey here is the receiver_id
-      filter: `message_type=eq.direct&or=(sender_id.eq.${messageKey},receiver_id.eq.${messageKey})`
+      // messageKey here is the receiver_id, context.currentUserId is the current user
+      filter: `message_type=eq.direct&or=(and(user_id.eq.${context.currentUserId},receiver_id.eq.${messageKey}),and(user_id.eq.${messageKey},receiver_id.eq.${context.currentUserId}))`
     }
   }
 
@@ -55,13 +55,13 @@ function createSubscriptionConfig(messageType: MessageType, messageKey: string |
   }
 }
 
-function createReactionSubscriptionConfig(messageType: MessageType, messageKey: string | number): SubscriptionConfig {
+function createReactionSubscriptionConfig(messageType: MessageType, messageKey: string | number, context: SubscriptionContext): SubscriptionConfig {
   // Special handling for thread type
   if (messageType === 'threads') {
     return {
       channelPrefix: `reactions-thread-${messageKey}`,
       table: 'message_reactions',
-      filter: `message_id=in.(select id from messages where parent_message_id=${messageKey})`
+      filter: `message_id=eq.${messageKey}`
     }
   }
 
@@ -70,8 +70,7 @@ function createReactionSubscriptionConfig(messageType: MessageType, messageKey: 
     return {
       channelPrefix: `reactions-dm-${messageKey}`,
       table: 'message_reactions',
-      // messageKey here is the receiver_id
-      filter: `message_id=in.(select id from messages where message_type=eq.direct and (sender_id=${messageKey} or receiver_id=${messageKey}))`
+      filter: `message_type=eq.direct&or=(and(user_id.eq.${context.currentUserId},receiver_id.eq.${messageKey}),and(user_id.eq.${messageKey},receiver_id.eq.${context.currentUserId}))`
     }
   }
 
@@ -79,7 +78,7 @@ function createReactionSubscriptionConfig(messageType: MessageType, messageKey: 
   return {
     channelPrefix: `reactions-channel-${messageKey}`,
     table: 'message_reactions',
-    filter: `message_id=in.(select id from messages where channel_id=${messageKey} and message_type=eq.channel)`
+    filter: `message_id=eq.${messageKey}`
   }
 }
 
@@ -146,23 +145,57 @@ function setupSubscription<T extends { [key: string]: any }>({
     storeKey: context.storeKey
   })
 
-  // Create the channel
+  // Create the channel with explicit event types
   const channel = (supabase as SupabaseClient)
     .channel(channelId)
     .on(
       'postgres_changes',
       {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
         table: config.table,
         filter: config.filter
       },
       async (payload: RealtimePostgresChangesPayload<T>) => {
-        console.debug('[Realtime] Received event:', {
-          type: payload.eventType,
+        console.debug('[Realtime] Received INSERT event:', {
           table: config.table,
           new: payload.new,
-          old: payload.old
+          filter: config.filter
+        })
+        await handleEvent(payload, context, handlers)
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: config.table,
+        filter: config.filter
+      },
+      async (payload: RealtimePostgresChangesPayload<T>) => {
+        console.debug('[Realtime] Received UPDATE event:', {
+          table: config.table,
+          new: payload.new,
+          old: payload.old,
+          filter: config.filter
+        })
+        await handleEvent(payload, context, handlers)
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: config.table,
+        filter: config.filter
+      },
+      async (payload: RealtimePostgresChangesPayload<T>) => {
+        console.debug('[Realtime] Received DELETE event:', {
+          table: config.table,
+          old: payload.old,
+          filter: config.filter
         })
         await handleEvent(payload, context, handlers)
       }
@@ -172,7 +205,8 @@ function setupSubscription<T extends { [key: string]: any }>({
     console.debug('[Realtime] Subscription status:', {
       channelId,
       status,
-      table: config.table
+      table: config.table,
+      filter: config.filter
     })
   })
 
@@ -197,13 +231,15 @@ export function setupMessageSubscription({
     context
   })
 
-  const config = createSubscriptionConfig(messageType, messageKey)
+  const config = createSubscriptionConfig(messageType, messageKey, context)
   refs.messageRef.current = setupSubscription<DbMessage>({
     config,
     handlers,
     context,
     handleEvent: handleMessageEvent
   })
+
+  return refs.messageRef.current
 }
 
 export function setupReactionSubscription({
@@ -224,11 +260,13 @@ export function setupReactionSubscription({
     context
   })
 
-  const config = createReactionSubscriptionConfig(messageType, messageKey)
+  const config = createReactionSubscriptionConfig(messageType, messageKey, context)
   refs.reactionRef.current = setupSubscription<MessageReaction>({
     config,
     handlers,
     context,
     handleEvent: handleReactionEvent
   })
+
+  return refs.reactionRef.current
 } 

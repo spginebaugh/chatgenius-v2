@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useMemo } from 'react'
 import type { UiMessage } from '@/types/messages-ui'
 import { useMessages } from '../messages'
@@ -27,7 +25,7 @@ export function useRealtimeMessages({
   onMessageUpdate?: (message: any) => void
   onReactionUpdate?: (messageId: number, reactions: any[]) => void
 }) {
-  const { messages, isLoading, error } = useMessages({ 
+  const { messages, isLoading: fetchLoading, error: fetchError } = useMessages({ 
     channelId, 
     receiverId, 
     parentMessageId, 
@@ -47,44 +45,24 @@ export function useRealtimeMessages({
 
   const { 
     realtimeMessages, 
-    setRealtimeMessages, 
-    mountedRef,
-    messageStateRef 
+    setRealtimeMessages,
+    isLoading,
+    setIsLoading,
+    error,
+    setError
   } = useMessageState(messages)
 
-  // Memoize the message state to prevent unnecessary updates
-  const currentMessageState = useMemo(() => ({
-    messages,
-    isLoading,
-    error
-  }), [messages, isLoading, error])
-
-  // Only update ref if state has actually changed
+  // Update loading and error states from fetch
   useEffect(() => {
-    const prevState = messageStateRef.current
-    if (
-      prevState.messages !== currentMessageState.messages ||
-      prevState.isLoading !== currentMessageState.isLoading ||
-      prevState.error !== currentMessageState.error
-    ) {
-      messageStateRef.current = currentMessageState
-    }
-  }, [currentMessageState])
-
-  useMessageSync({
-    messages,
-    realtimeMessages,
-    setRealtimeMessages,
-    mountedRef,
-    callbacks // Pass memoized callbacks
-  })
+    setIsLoading(fetchLoading)
+    setError(fetchError)
+  }, [fetchLoading, fetchError])
 
   useSubscriptionSetup({
     refs,
     params,
-    mountedRef,
     setRealtimeMessages,
-    callbacks // Pass memoized callbacks
+    callbacks
   })
 
   return {

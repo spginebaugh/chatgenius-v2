@@ -43,11 +43,11 @@ export async function handleMessage({
     try {
       await Promise.all(
         files.map(file => processFileAttachment({ 
-          messageId: insertedMessage.id, 
+          messageId: insertedMessage.message_id, 
           file 
         }))
       )
-      const updatedMessage = await refreshMessageWithFiles(insertedMessage.id)
+      const updatedMessage = await refreshMessageWithFiles(insertedMessage.message_id)
       return formatMessageResponse(updatedMessage)
     } catch (error) {
       console.error('Error handling file attachments:', error)

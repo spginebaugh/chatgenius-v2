@@ -43,34 +43,41 @@ export function useMessageSync({
   messages,
   realtimeMessages,
   setRealtimeMessages,
+  addOrUpdateMessage,
+  removeMessage,
   mountedRef,
   callbacks
 }: {
   messages: UiMessage[]
   realtimeMessages: UiMessage[]
   setRealtimeMessages: React.Dispatch<React.SetStateAction<UiMessage[]>>
+  addOrUpdateMessage: (message: UiMessage) => void
+  removeMessage: (messageId: number) => void
   mountedRef: React.MutableRefObject<boolean>
   callbacks: MessageCallbacks
 }) {
   const syncMessages = useMemo(() => () => {
     if (!mountedRef.current) return
 
-    // Check if arrays have different lengths first
-    if (messages.length !== realtimeMessages.length) {
-      setRealtimeMessages(messages)
-      return
-    }
+    // Create sets of message IDs for efficient lookup
+    const currentIds = new Set(realtimeMessages.map(m => m.message_id))
+    const newIds = new Set(messages.map(m => m.message_id))
 
-    // Check if any message has changed using comparison
-    const hasChanges = messages.some((msg, index) => {
-      const realtimeMsg = realtimeMessages[index]
-      return !compareMessages(msg, realtimeMsg)
+    // Handle deletions
+    realtimeMessages.forEach(msg => {
+      if (!newIds.has(msg.message_id)) {
+        removeMessage(msg.message_id)
+      }
     })
 
-    if (hasChanges) {
-      setRealtimeMessages(messages)
-    }
-  }, [messages, realtimeMessages, setRealtimeMessages, mountedRef])
+    // Handle additions and updates
+    messages.forEach(msg => {
+      const existingMsg = realtimeMessages.find(m => m.message_id === msg.message_id)
+      if (!existingMsg || !compareMessages(msg, existingMsg)) {
+        addOrUpdateMessage(msg)
+      }
+    })
+  }, [messages, realtimeMessages, addOrUpdateMessage, removeMessage, mountedRef])
 
   useEffect(() => {
     syncMessages()

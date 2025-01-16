@@ -15,17 +15,17 @@ export function formatMessageForClient(message: MessageWithJoins, currentUserId:
     message_id: message.message_id,
     message: message.message || '',
     message_type: message.message_type,
-    user_id: message.user?.user_id || message.user_id,
+    user_id: message.profiles?.user_id || message.user_id,
     channel_id: message.channel_id,
     receiver_id: message.receiver_id,
     parent_message_id: message.parent_message_id,
     thread_count: message.thread_count,
     inserted_at: message.inserted_at,
     profiles: {
-      user_id: message.user?.user_id || message.user_id,
-      username: message.user?.username || 'Unknown',
-      profile_picture_url: null,
-      status: 'OFFLINE'
+      user_id: message.profiles?.user_id || message.user_id,
+      username: message.profiles?.username || 'Unknown',
+      profile_picture_url: message.profiles?.profile_picture_url || null,
+      status: message.profiles?.status || 'OFFLINE'
     },
     files: message.files?.map((file: FileInfo) => ({
       url: file.file_url,
@@ -52,9 +52,11 @@ export function formatMessagesForClient(messages: RawMessage[], currentUserId: s
       parent_message_id: message.parent_message_id,
       thread_count: message.thread_count,
       inserted_at: message.inserted_at,
-      user: message.profiles ? {
+      profiles: message.profiles ? {
         user_id: message.profiles.user_id,
-        username: message.profiles.username || 'Unknown'
+        username: message.profiles.username || 'Unknown',
+        profile_picture_url: message.profiles.profile_picture_url || null,
+        status: message.profiles.status || 'OFFLINE'
       } : undefined,
       files: message.files,
       reactions: message.reactions

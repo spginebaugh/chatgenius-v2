@@ -1,21 +1,21 @@
-import type { DbMessage, MessageFile, FileType } from '@/types/database'
+import type { DbMessage, UserStatus, MessageFile } from '@/types/database'
 import type { UiMessage } from '@/types/messages-ui'
 import { createClient } from '@/lib/supabase/client'
-import { formatReactions } from '@/lib/stores/messages/utils'
-import { createUiProfile } from './profile-utils'
-import { MessageWithJoins } from "@/lib/client/hooks/messages/format-utils"
 
 const supabase = createClient()
 
-interface FileInfo {
-  file_id: number
-  file_type: FileType
-  file_url: string
+function getFileNameFromUrl(url: string): string {
+  try {
+    const urlParts = url.split('/')
+    return urlParts[urlParts.length - 1] || 'file'
+  } catch {
+    return 'file'
+  }
 }
 
-export async function convertToUiMessage(dbMessage: DbMessage, currentUserId: string): Promise<UiMessage> {
-  // Fetch the complete message with joins
-  const { data: messageWithJoins } = await supabase
+export async function convertToUiMessage(message: DbMessage, currentUserId: string): Promise<UiMessage> {
+  // Fetch full message data with all relations
+  const { data: messageData } = await supabase
     .from('messages')
     .select(`
       *,
@@ -26,68 +26,52 @@ export async function convertToUiMessage(dbMessage: DbMessage, currentUserId: st
         status
       ),
       files:message_files(*),
-      reactions:message_reactions(*)
+      reactions:message_reactions(*),
+      mentions:message_mentions(*)
     `)
-    .eq('message_id', dbMessage.message_id)
+    .eq('message_id', message.message_id)
     .single()
 
-  if (!messageWithJoins) {
-    // Fallback if joins fail - only use stable data from dbMessage
+  if (!messageData) {
+    // Fallback to basic message format if fetch fails
     return {
-      ...dbMessage,
-      message: dbMessage.message || '',
-      profiles: createUiProfile(null, dbMessage.user_id),
+      message_id: message.message_id,
+      message: message.message || '',
+      message_type: message.message_type,
+      user_id: message.user_id,
+      channel_id: message.channel_id,
+      receiver_id: message.receiver_id,
+      parent_message_id: message.parent_message_id,
+      thread_count: message.thread_count || 0,
+      inserted_at: message.inserted_at,
+      profiles: {
+        user_id: message.user_id,
+        username: 'Unknown',
+        profile_picture_url: null,
+        status: 'OFFLINE' as UserStatus
+      },
       reactions: [],
       files: [],
       thread_messages: []
     }
   }
 
-  // Format the message with all its relations
-  // Only include stable data that comes from the database
+  // Format the message with all relations
   return {
-    message_id: messageWithJoins.message_id,
-    message: messageWithJoins.message || '',
-    message_type: messageWithJoins.message_type,
-    user_id: messageWithJoins.user_id,
-    channel_id: messageWithJoins.channel_id,
-    receiver_id: messageWithJoins.receiver_id,
-    parent_message_id: messageWithJoins.parent_message_id,
-    thread_count: messageWithJoins.thread_count,
-    inserted_at: messageWithJoins.inserted_at,
-    profiles: createUiProfile(messageWithJoins.profiles, messageWithJoins.user_id),
-    reactions: formatReactions(messageWithJoins.reactions || [], currentUserId),
-    files: ((messageWithJoins.files || []) as MessageFile[]).map(file => ({
+    ...messageData,
+    profiles: messageData.profiles || {
+      user_id: messageData.user_id,
+      username: 'Unknown',
+      profile_picture_url: null,
+      status: 'OFFLINE' as UserStatus
+    },
+    reactions: messageData.reactions || [],
+    files: (messageData.files || []).map((file: MessageFile) => ({
       url: file.file_url,
       type: file.file_type,
-      name: file.file_url.split('/').pop() || 'file'
+      name: getFileNameFromUrl(file.file_url),
+      vector_status: file.vector_status
     })),
     thread_messages: []
-  }
-}
-
-export function convertMessageToUi(messageWithJoins: MessageWithJoins, currentUserId: string): UiMessage {
-  return {
-    message_id: messageWithJoins.message_id,
-    message: messageWithJoins.message || '',
-    message_type: messageWithJoins.message_type,
-    user_id: messageWithJoins.user?.user_id || messageWithJoins.user_id,
-    channel_id: messageWithJoins.channel_id,
-    receiver_id: messageWithJoins.receiver_id,
-    parent_message_id: messageWithJoins.parent_message_id,
-    thread_count: messageWithJoins.thread_count,
-    inserted_at: messageWithJoins.inserted_at,
-    profiles: {
-      user_id: messageWithJoins.user?.user_id || messageWithJoins.user_id,
-      username: messageWithJoins.user?.username || 'Unknown',
-      profile_picture_url: null,
-      status: 'OFFLINE'
-    },
-    files: messageWithJoins.files?.map((file: FileInfo) => ({
-      url: file.file_url,
-      type: file.file_type,
-      name: file.file_url.split('/').pop() || 'file'
-    })) || [],
-    reactions: formatReactions(messageWithJoins.reactions || [], currentUserId)
   }
 } 

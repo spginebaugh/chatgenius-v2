@@ -17,6 +17,7 @@ export async function fetchFullMessage(messageId: number) {
         status
       ),
       reactions:message_reactions(*),
+      files:message_files(*),
       thread_messages:messages!parent_message_id(
         *,
         profiles:users!messages_user_id_fkey(
@@ -46,6 +47,12 @@ export function formatMessageForUi(messageData: any): UiMessage {
       username: 'Unknown'
     },
     reactions: messageData.reactions || [],
+    files: (messageData.files || []).map((file: any) => ({
+      url: file.file_url,
+      type: file.file_type,
+      name: file.name || 'file',
+      vector_status: file.vector_status
+    })),
     thread_messages: messageData.thread_messages?.map((threadMsg: DbMessage & { 
       profiles?: { 
         id: string

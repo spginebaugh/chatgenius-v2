@@ -1,4 +1,4 @@
-import { MessageType, FileType, MessageReaction, DbMessage, MessageFile } from '@/types/database'
+import { MessageType, FileType, MessageReaction, DbMessage, MessageFile, UserStatus } from '@/types/database'
 import { UiMessage } from '@/types/messages-ui'
 
 export interface FormattedReaction {
@@ -14,7 +14,12 @@ function getFileNameFromUrl(url: string): string {
 export interface FormatMessageParams {
   message: DbMessage & {
     reactions?: MessageReaction[]
-    user?: { user_id: string; username: string }
+    profiles?: {
+      user_id: string
+      username: string | null
+      profile_picture_url: string | null
+      status: UserStatus
+    }
     files?: MessageFile[]
   }
   currentUserId: string
@@ -30,7 +35,12 @@ export interface MessageWithJoins {
   parent_message_id: number | null
   thread_count: number
   inserted_at: string
-  user?: { user_id: string; username: string }
+  profiles?: {
+    user_id: string
+    username: string | null
+    profile_picture_url: string | null
+    status: UserStatus
+  }
   files?: { file_id: number; file_type: FileType; file_url: string }[]
   reactions?: MessageReaction[]
 }
@@ -59,10 +69,10 @@ export function formatMessage({ message, currentUserId }: FormatMessageParams): 
     ...message,
     message: message.message || '',
     profiles: {
-      user_id: message.user?.user_id || message.user_id,
-      username: message.user?.username || 'Unknown',
-      profile_picture_url: null,
-      status: 'OFFLINE'
+      user_id: message.profiles?.user_id || message.user_id,
+      username: message.profiles?.username || 'Unknown',
+      profile_picture_url: message.profiles?.profile_picture_url || null,
+      status: message.profiles?.status || 'OFFLINE'
     },
     reactions: formatReactions(message.reactions, currentUserId),
     files: (message.files || []).map(file => ({
@@ -80,17 +90,17 @@ export function formatMessageForClient(message: MessageWithJoins, currentUserId:
     message_id: message.message_id,
     message: message.message || '',
     message_type: message.message_type,
-    user_id: message.user?.user_id || message.user_id,
+    user_id: message.profiles?.user_id || message.user_id,
     channel_id: message.channel_id,
     receiver_id: message.receiver_id,
     parent_message_id: message.parent_message_id,
     thread_count: message.thread_count,
     inserted_at: message.inserted_at,
     profiles: {
-      user_id: message.user?.user_id || message.user_id,
-      username: message.user?.username || 'Unknown',
-      profile_picture_url: null,
-      status: 'OFFLINE'
+      user_id: message.profiles?.user_id || message.user_id,
+      username: message.profiles?.username || 'Unknown',
+      profile_picture_url: message.profiles?.profile_picture_url || null,
+      status: message.profiles?.status || 'OFFLINE'
     },
     files: message.files?.map((file: { file_url: string; file_type: FileType }) => ({
       url: file.file_url,

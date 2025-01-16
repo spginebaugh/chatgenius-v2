@@ -115,7 +115,7 @@ export function subscribeToChannelMessages({
 }: SubscribeToChannelMessagesProps): Promise<SubscriptionReturn> {
   return createTableSubscription<DbMessage>({
     table: 'messages',
-    filter: `and(channel_id.eq.${channelId},message_type.eq.channel)`,
+    filter: `channel_id=eq.${channelId}&message_type=eq.channel`,
     callbacks
   })
 }
@@ -130,7 +130,7 @@ export function subscribeToDirectMessages({
 }: SubscribeToDirectMessagesProps): Promise<SubscriptionReturn> {
   return createTableSubscription<DbMessage>({
     table: 'messages',
-    filter: `and(message_type.eq.direct,or(and(user_id.eq.${userId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${userId})))`,
+    filter: `message_type=eq.direct&or=(and(user_id.eq.${userId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${userId}))`,
     callbacks
   })
 }
@@ -144,7 +144,7 @@ export function subscribeToThreadMessages({
 }: SubscribeToThreadMessagesProps): Promise<SubscriptionReturn> {
   return createTableSubscription({
     table: 'messages',
-    filter: `message_id=in.(select message_id from messages where parent_message_id=${parentMessageId})`,
+    filter: `parent_message_id=eq.${parentMessageId}`,
     callbacks
   })
 }
@@ -158,7 +158,7 @@ export function subscribeToReactions({
 }: SubscribeToReactionsProps): Promise<SubscriptionReturn> {
   return createTableSubscription<DbMessage>({
     table: 'message_reactions',
-    filter: `message_id.eq.${messageId}`,
+    filter: `message_id=eq.${messageId}`,
     callbacks
   })
 }
@@ -172,7 +172,7 @@ export function subscribeToUserStatus({
 }: SubscribeToUserStatusProps): Promise<SubscriptionReturn> {
   return createTableSubscription({
     table: 'users',
-    filter: `user_id.in.(${userIds.join(',')})`,
+    filter: `user_id=in.(${userIds.join(',')})`,
     callbacks
   })
 }

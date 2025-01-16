@@ -1,22 +1,40 @@
 "use client"
 
-import { useRef, useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { UiMessage } from '@/types/messages-ui'
-import { useMountedRef } from './subscription-hooks'
 
 export function useMessageState(initialMessages: UiMessage[]) {
   const [realtimeMessages, setRealtimeMessages] = useState<UiMessage[]>(initialMessages)
-  const mountedRef = useMountedRef()
-  const messageStateRef = useRef<{
-    messages: UiMessage[]
-    isLoading: boolean
-    error: any
-  }>({ messages: [], isLoading: true, error: null })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<any>(null)
+
+  const addOrUpdateMessage = useCallback((formattedMessage: UiMessage) => {
+    setRealtimeMessages(prev => {
+      const exists = prev.some(m => m.message_id === formattedMessage.message_id)
+      if (!exists) return [...prev, formattedMessage]
+      return prev.map(m => m.message_id === formattedMessage.message_id ? formattedMessage : m)
+    })
+  }, [])
+
+  const removeMessage = useCallback((messageId: number) => {
+    setRealtimeMessages(prev => prev.filter(msg => msg.message_id !== messageId))
+  }, [])
+
+  const updateMessage = useCallback((messageId: number, formattedMessage: UiMessage) => {
+    setRealtimeMessages(prev => prev.map(msg => 
+      msg.message_id === messageId ? formattedMessage : msg
+    ))
+  }, [])
 
   return {
     realtimeMessages,
     setRealtimeMessages,
-    mountedRef,
-    messageStateRef
+    isLoading,
+    setIsLoading,
+    error,
+    setError,
+    addOrUpdateMessage,
+    removeMessage,
+    updateMessage
   }
 } 

@@ -16,14 +16,25 @@ export const MESSAGE_SELECT_QUERY = `
 export async function insertMessage(messageData: MessageData) {
   const supabase = await createClient()
   
-  const { data: message, error } = await supabase
+  // First insert and get just the message_id
+  const { data: messageId, error: insertError } = await supabase
     .from('messages')
     .insert(messageData)
-    .select(MESSAGE_SELECT_QUERY)
+    .select('message_id')
     .single()
 
-  if (error) throw new Error(error.message)
-  if (!message) throw new Error('Failed to create message')
+  if (insertError) throw new Error(insertError.message)
+  if (!messageId) throw new Error('Failed to create message')
+
+  // Then fetch the full message with all relations
+  const { data: message, error: fetchError } = await supabase
+    .from('messages')
+    .select(MESSAGE_SELECT_QUERY)
+    .eq('message_id', messageId.message_id)
+    .single()
+
+  if (fetchError) throw new Error(fetchError.message)
+  if (!message) throw new Error('Failed to fetch message')
   
   return message
 }
@@ -56,7 +67,27 @@ export function formatMessageResponse(message: DbMessage & {
       username: 'Unknown'
     },
     reactions: message.reactions || [],
-    files: message.files || [],
+    files: (message.files || []).map(file => ({
+      url: file.file_url,
+      type: file.file_type,
+      name: file.name || 'file',
+      vector_status: file.vector_status
+    })),
     thread_messages: message.thread_messages || []
   }
+}
+
+export async function getMessage(messageId: number) {
+  const supabase = await createClient()
+  
+  const { data: message, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('message_id', messageId)
+    .single()
+
+  if (error) throw new Error(error.message)
+  if (!message) throw new Error('Failed to fetch message')
+  
+  return message
 } 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatMessage } from './format-utils'
 import { fetchCurrentUser, fetchMessagesData } from './query-utils'
 import type { UseMessagesProps, UseMessagesResult } from './types'
+import type { UserStatus, MessageFile } from '@/types/database'
 
 export function useMessages({ 
   channelId,
@@ -27,9 +28,24 @@ export function useMessages({
           fetchMessagesData({ channelId, receiverId, parentMessageId, supabase })
         ])
 
-        const formattedMessages = messagesData.map(msg => 
-          formatMessage({ message: msg, currentUserId: currentUser.id })
-        )
+        const formattedMessages = messagesData.map(msg => {
+          const messageWithProfile = {
+            ...msg,
+            profiles: Array.isArray(msg.profiles) && msg.profiles[0] ? {
+              user_id: String(msg.profiles[0].user_id),
+              username: msg.profiles[0].username,
+              profile_picture_url: null,
+              status: 'OFFLINE' as UserStatus
+            } : undefined,
+            files: (msg.message_files || []).map(file => ({
+              ...file,
+              message_id: msg.message_id,
+              vector_status: 'completed',
+              inserted_at: msg.inserted_at
+            })) as MessageFile[]
+          }
+          return formatMessage({ message: messageWithProfile, currentUserId: currentUser.id })
+        })
 
         setMessages(formattedMessages)
       } catch (err) {

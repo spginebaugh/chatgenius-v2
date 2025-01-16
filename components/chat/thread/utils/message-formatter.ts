@@ -13,10 +13,10 @@ export function formatMessageWithJoins(messageWithJoins: MessageWithJoins, curre
   return {
     ...messageWithJoins,
     profiles: {
-      user_id: messageWithJoins.user?.user_id || messageWithJoins.user_id,
-      username: messageWithJoins.user?.username || 'Unknown',
-      profile_picture_url: null,
-      status: 'OFFLINE'
+      user_id: messageWithJoins.profiles?.user_id || messageWithJoins.user_id,
+      username: messageWithJoins.profiles?.username || 'Unknown',
+      profile_picture_url: messageWithJoins.profiles?.profile_picture_url || null,
+      status: messageWithJoins.profiles?.status || 'OFFLINE'
     },
     reactions: formatReactions(messageWithJoins.reactions || [], currentUserId),
     files: messageWithJoins.files?.map((file: FileInfo) => ({

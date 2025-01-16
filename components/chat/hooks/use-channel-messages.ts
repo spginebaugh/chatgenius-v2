@@ -1,41 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { DbMessage, MessageReaction, UserStatus } from "@/types/database"
 import { UiMessage } from "@/types/messages-ui"
-import { useThreadMessageState } from "./use-thread-message-state"
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { convertToUiMessage } from "@/lib/client/hooks/realtime-messages/message-converter"
 
-interface MessageSubscription {
-  message_id: number
-  message: string
-  message_type: DbMessage['message_type']
-  user_id: string
-  channel_id: number | null
-  receiver_id: string | null
-  parent_message_id: number | null
-  thread_count: number
-  inserted_at: string
-  profiles?: {
-    user_id: string
-    username: string | null
-    profile_picture_url: string | null
-    status: UserStatus
-  }
-  files?: {
-    file_id: number
-    file_type: string
-    file_url: string
-  }[]
-  reactions?: MessageReaction[]
-}
-
-export function useThreadMessages(selectedMessage: UiMessage, currentUserId: string) {
-  const messageId = useMemo(() => selectedMessage.message_id, [selectedMessage.message_id])
-  const { addOrUpdateMessage, removeMessage, updateMessage, threadMessages, setThreadMessages } = useThreadMessageState([])
+export function useChannelMessages(channelId: number, currentUserId: string) {
+  const [messages, setMessages] = useState<UiMessage[]>([])
   const supabase = createClient()
   const subscriptionRef = useRef<RealtimeChannel | null>(null)
   const lastEventRef = useRef<{ type: string; message_id: number } | null>(null)
+
+  const addOrUpdateMessage = useCallback((message: UiMessage) => {
+    setMessages(prev => {
+      const index = prev.findIndex(m => m.message_id === message.message_id)
+      if (index === -1) {
+        return [...prev, message]
+      }
+      const newMessages = [...prev]
+      newMessages[index] = message
+      return newMessages
+    })
+  }, [])
+
+  const removeMessage = useCallback((messageId: number) => {
+    setMessages(prev => prev.filter(m => m.message_id !== messageId))
+  }, [])
 
   const handleMessageInsert = useCallback(async (message: DbMessage) => {
     const eventKey = `INSERT_${message.message_id}`
@@ -60,16 +50,14 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
     lastEventRef.current = { type: eventKey, message_id: message.message_id }
 
     const formattedMessage = await convertToUiMessage(message, currentUserId)
-    if (formattedMessage) updateMessage(message.message_id, formattedMessage)
-  }, [updateMessage, currentUserId])
+    if (formattedMessage) addOrUpdateMessage(formattedMessage)
+  }, [addOrUpdateMessage, currentUserId])
 
-  // Separate effect for initial message fetch
+  // Fetch initial messages
   useEffect(() => {
     let isMounted = true
 
     const fetchInitialMessages = async () => {
-      if (!messageId) return
-
       const { data: messages } = await supabase
         .from('messages')
         .select(`
@@ -83,25 +71,24 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
           files:message_files(*),
           reactions:message_reactions(*)
         `)
-        .eq('parent_message_id', messageId)
+        .eq('channel_id', channelId)
+        .eq('message_type', 'channel')
         .order('inserted_at', { ascending: true })
 
       if (!isMounted || !messages) return
 
       const formattedMessages = await Promise.all(messages.map(msg => convertToUiMessage(msg, currentUserId)))
       if (isMounted) {
-        setThreadMessages(formattedMessages)
+        setMessages(formattedMessages)
       }
     }
 
     fetchInitialMessages()
     return () => { isMounted = false }
-  }, [messageId, currentUserId, setThreadMessages])
+  }, [channelId, currentUserId])
 
-  // Separate effect for subscription management
+  // Set up realtime subscription
   useEffect(() => {
-    if (!messageId) return
-
     // Clean up previous subscription if it exists
     if (subscriptionRef.current) {
       subscriptionRef.current.unsubscribe()
@@ -110,13 +97,13 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
 
     // Set up new subscription
     subscriptionRef.current = supabase
-      .channel(`thread-messages-${messageId}`)
+      .channel(`channel-messages-${channelId}`)
       .on('postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `parent_message_id=eq.${messageId}`
+          filter: `channel_id=eq.${channelId}&message_type=eq.channel`
         },
         payload => {
           if (payload.new && 'message_id' in payload.new) {
@@ -129,7 +116,7 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
           event: 'DELETE',
           schema: 'public',
           table: 'messages',
-          filter: `parent_message_id=eq.${messageId}`
+          filter: `channel_id=eq.${channelId}&message_type=eq.channel`
         },
         payload => {
           if (payload.old && 'message_id' in payload.old) {
@@ -142,7 +129,7 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
-          filter: `parent_message_id=eq.${messageId}`
+          filter: `channel_id=eq.${channelId}&message_type=eq.channel`
         },
         payload => {
           if (payload.new && 'message_id' in payload.new) {
@@ -159,24 +146,20 @@ export function useThreadMessages(selectedMessage: UiMessage, currentUserId: str
         subscriptionRef.current = null
       }
     }
-  }, [messageId, handleMessageInsert, handleMessageDelete, handleMessageUpdate])
+  }, [channelId, handleMessageInsert, handleMessageDelete, handleMessageUpdate])
 
   const sendMessage = useCallback(async (message: string) => {
     await supabase.from('messages').insert({
       message,
-      message_type: 'thread',
+      message_type: 'channel',
+      channel_id: channelId,
       user_id: currentUserId,
-      parent_message_id: messageId,
       inserted_at: new Date().toISOString()
     })
-  }, [messageId, currentUserId])
+  }, [channelId, currentUserId])
 
   return {
-    threadMessages,
-    addOrUpdateMessage,
-    removeMessage,
-    updateMessage,
-    setThreadMessages,
+    messages,
     sendMessage
   }
 } 

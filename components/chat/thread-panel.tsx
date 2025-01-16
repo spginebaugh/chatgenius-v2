@@ -20,6 +20,8 @@ export function ThreadPanel({
 }: ThreadPanelProps) {
   const { threadMessages, sendMessage } = useThreadMessages(selectedMessage, currentUserId)
 
+  console.log('Thread panel rendering with messages:', threadMessages)
+
   const handleSendMessage = async (message: string) => {
     await sendMessage(message)
   }
@@ -48,16 +50,19 @@ export function ThreadPanel({
 
       <div className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-4">
-          {threadMessages?.map((message: UiMessage) => (
-            <li key={message.message_id}>
-              <MessageItem
-                message={message}
-                onReactionSelect={onEmojiSelect}
-                onThreadSelect={handleThreadSelect}
-                isThreadMessage
-              />
-            </li>
-          ))}
+          {threadMessages?.map((message: UiMessage) => {
+            console.log('Rendering thread message:', message)
+            return (
+              <li key={message.message_id}>
+                <MessageItem
+                  message={message}
+                  onReactionSelect={onEmojiSelect}
+                  onThreadSelect={handleThreadSelect}
+                  isThreadMessage
+                />
+              </li>
+            )
+          })}
         </ul>
       </div>
 

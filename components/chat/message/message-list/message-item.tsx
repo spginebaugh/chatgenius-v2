@@ -12,6 +12,8 @@ import { MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmojiButton } from "../../thread/components/emoji-button"
 
+const RAG_BOT_USER_ID = '00000000-0000-0000-0000-000000000000'
+
 interface MessageItemProps {
   message: UiMessage
   onReactionSelect: (messageId: number, emoji: string) => Promise<void>
@@ -27,8 +29,8 @@ export function MessageItem({
   isThreadMessage = false,
   isStreaming = false
 }: MessageItemProps) {
-  // If it's a RAG message, use the specialized component
-  if (message.message_type === 'rag') {
+  // If it's a RAG message (identified by user ID), use the specialized component
+  if (message.user_id === RAG_BOT_USER_ID) {
     return (
       <RagMessage 
         message={message}

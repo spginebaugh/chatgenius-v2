@@ -1,4 +1,4 @@
-export type MessageType = 'channel' | 'direct' | 'thread' | 'rag'
+export type MessageType = 'channel' | 'direct' | 'thread'
 export type UserStatus = 'ONLINE' | 'OFFLINE'
 export type FileType = 'image' | 'video' | 'audio' | 'document'
 export type AppRole = 'admin' | 'moderator'

@@ -3,6 +3,15 @@ import { UiFileAttachment } from '@/types/messages-ui'
 import { insertRecord } from '../../supabase'
 import { createClient } from '@/app/_lib/supabase-server'
 
+const VALID_FILE_TYPES = ['image', 'video', 'audio', 'document'] as const
+
+function validateFileType(type: string): FileType {
+  if (!VALID_FILE_TYPES.includes(type as FileType)) {
+    throw new Error(`Invalid file type: ${type}. Must be one of: ${VALID_FILE_TYPES.join(', ')}`)
+  }
+  return type as FileType
+}
+
 interface HandleFileAttachmentsProps {
   messageId: number
   files: UiFileAttachment[]
@@ -20,9 +29,7 @@ export async function handleFileAttachments({
   const fileRecords = files.map(file => ({
     message_id: messageId,
     file_url: file.url,
-    file_type: (file.type === 'image' ? 'image' : 
-                file.type === 'video' ? 'video' :
-                file.type === 'audio' ? 'audio' : 'document') as FileType,
+    file_type: validateFileType(file.type),
     inserted_at: new Date().toISOString()
   }))
 
