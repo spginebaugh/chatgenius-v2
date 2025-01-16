@@ -33,7 +33,7 @@ async function updateUserStatus({
         status,
         last_active_at: new Date().toISOString()
       })
-      .eq('id', userId);
+      .eq('user_id', userId);
   } catch (error) {
     console.error('Error updating user status:', error);
   }

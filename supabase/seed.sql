@@ -13,25 +13,25 @@ values
 -- Update user profiles with additional information
 update public.users 
 set 
-  username = case id
+  username = case user_id
     when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'admin'
     when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'alice'
     when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'bob'
     when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'charlie'
   end,
-  bio = case id
+  bio = case user_id
     when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'System Administrator'
     when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'Software Engineer'
     when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'Product Manager'
     when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'UX Designer'
   end,
-  profile_picture_url = case id
+  profile_picture_url = case user_id
     when 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d' then 'https://example.com/avatars/admin.jpg'
     when 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f' then 'https://example.com/avatars/alice.jpg'
     when 'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e' then 'https://example.com/avatars/bob.jpg'
     when 'd7e3f040-0e92-5d3c-9f2d-5c3d5b3e6a3f' then 'https://example.com/avatars/charlie.jpg'
   end
-where id in (
+where user_id in (
   'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d',
   'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f',
   'c6d2e939-9d91-4c2b-8f1c-4b2c4e3d5a2e',
@@ -55,14 +55,14 @@ values
   ('moderator', 'messages.delete');
 
 -- Seed channels
-insert into public.channels (id, slug, created_by)
+insert into public.channels (channel_id, slug, created_by)
 values
   (1, 'general', 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d'),
   (2, 'random', 'd0fc7e7c-8e3a-4195-84f5-fce375b2a76d'),
   (3, 'development', 'b6088c7c-d8f1-4a1c-8e18-e2e58e3c0a1f');
 
 -- Reset sequences
-select setval('public.channels_id_seq', (select max(id) from public.channels));
+select setval('public.channels_channel_id_seq', (select max(channel_id) from public.channels));
 
 -- Seed some channel messages
 insert into public.messages (message, message_type, user_id, channel_id)
@@ -83,7 +83,7 @@ do $$
 declare
   welcome_message_id bigint;
 begin
-  select id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
+  select message_id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
 
   -- Seed some thread messages
   insert into public.messages (message, message_type, user_id, parent_message_id)
@@ -93,7 +93,7 @@ begin
 end $$;
 
 -- Reset message sequence
-select setval('public.messages_id_seq', (select max(id) from public.messages));
+select setval('public.messages_message_id_seq', (select max(message_id) from public.messages));
 
 -- Seed reactions, mentions, and files
 do $$
@@ -103,10 +103,10 @@ declare
   lunch_message_id bigint;
   kickoff_message_id bigint;
 begin
-  select id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
-  select id into hey_everyone_id from public.messages where message = 'Hey everyone!';
-  select id into lunch_message_id from public.messages where message = 'Anyone up for lunch?';
-  select id into kickoff_message_id from public.messages where message = 'New project kickoff tomorrow!';
+  select message_id into welcome_message_id from public.messages where message = 'Welcome to the general channel!';
+  select message_id into hey_everyone_id from public.messages where message = 'Hey everyone!';
+  select message_id into lunch_message_id from public.messages where message = 'Anyone up for lunch?';
+  select message_id into kickoff_message_id from public.messages where message = 'New project kickoff tomorrow!';
 
   -- Seed reactions
   insert into public.message_reactions (message_id, user_id, emoji)

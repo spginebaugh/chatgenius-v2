@@ -35,7 +35,7 @@ interface SubscribeToDirectMessagesProps {
 }
 
 interface SubscribeToThreadMessagesProps {
-  parentId: number
+  parentMessageId: number
   callbacks: SubscriptionCallbacks<DbMessage>
 }
 
@@ -130,7 +130,7 @@ export function subscribeToDirectMessages({
 }: SubscribeToDirectMessagesProps): Promise<SubscriptionReturn> {
   return createTableSubscription<DbMessage>({
     table: 'messages',
-    filter: `and(type.eq.direct,or(and(sender_id.eq.${userId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${userId})))`,
+    filter: `and(message_type.eq.direct,or(and(user_id.eq.${userId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${userId})))`,
     callbacks
   })
 }
@@ -139,12 +139,12 @@ export function subscribeToDirectMessages({
  * Creates a subscription to thread messages for a parent message
  */
 export function subscribeToThreadMessages({
-  parentId,
+  parentMessageId,
   callbacks
 }: SubscribeToThreadMessagesProps): Promise<SubscriptionReturn> {
-  return createTableSubscription<DbMessage>({
+  return createTableSubscription({
     table: 'messages',
-    filter: `and(parent_id.eq.${parentId},type.eq.thread)`,
+    filter: `message_id=in.(select message_id from messages where parent_message_id=${parentMessageId})`,
     callbacks
   })
 }
@@ -170,9 +170,9 @@ export function subscribeToUserStatus({
   userIds,
   callbacks
 }: SubscribeToUserStatusProps): Promise<SubscriptionReturn> {
-  return createTableSubscription<User>({
+  return createTableSubscription({
     table: 'users',
-    filter: `id.in.(${userIds.join(',')})`,
+    filter: `user_id.in.(${userIds.join(',')})`,
     callbacks
   })
 }

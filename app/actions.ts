@@ -56,8 +56,8 @@ export const signInAction = async (formData: FormData) => {
     // First check if user exists
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
-      .eq('id', data.user.id)
+      .select('user_id')
+      .eq('user_id', data.user.id)
       .single();
 
     if (!existingUser) {
@@ -65,7 +65,7 @@ export const signInAction = async (formData: FormData) => {
       await supabase
         .from('users')
         .insert({
-          id: data.user.id,
+          user_id: data.user.id,
           username: email.split('@')[0],
           status: 'ONLINE',
           last_active_at: new Date().toISOString()
@@ -78,14 +78,14 @@ export const signInAction = async (formData: FormData) => {
           status: 'ONLINE',
           last_active_at: new Date().toISOString()
         },
-        match: { id: data.user.id }
+        match: { user_id: data.user.id }
       });
     }
 
     // Get the first channel or default to channel 1
     const channels = await selectRecords<Channel>({
       table: 'channels',
-      select: 'id',
+      select: 'channel_id',
       options: {
         errorMap: {
           NOT_FOUND: { 
@@ -96,7 +96,7 @@ export const signInAction = async (formData: FormData) => {
       }
     });
     
-    const channelId = channels?.[0]?.id || 1;
+    const channelId = channels?.[0]?.channel_id || 1;
     return redirect(`/channel/${channelId}`);
   } catch (error) {
     console.error('[SignInAction] Error updating user status:', error);
@@ -189,7 +189,7 @@ export const signOutAction = async () => {
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         },
-        match: { id: user.id },
+        match: { user_id: user.id },
         options: {
           errorMap: {
             NOT_FOUND: {
@@ -225,7 +225,7 @@ export async function logout() {
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         },
-        match: { id: user.id },
+        match: { user_id: user.id },
         options: {
           errorMap: {
             NOT_FOUND: {

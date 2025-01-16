@@ -34,7 +34,7 @@ export function useMessageFetch({
 
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!currentUser?.id) {
+      if (!currentUser?.user_id) {
         console.error('No user found')
         return
       }
@@ -55,7 +55,7 @@ export function useMessageFetch({
       }
 
       try {
-        const formattedMessages = await fetchAndFormatMessages(queryConfig, currentUser.id)
+        const formattedMessages = await fetchAndFormatMessages(queryConfig, currentUser.user_id)
         setMessages(queryConfig.messageType, queryConfig.storeKey, formattedMessages)
       } catch (error) {
         console.error('Error in fetchMessages:', error)
@@ -63,5 +63,5 @@ export function useMessageFetch({
     }
 
     fetchMessages()
-  }, [currentUser?.id, currentChannelId, currentDmUserId, parentMessageId, setMessages, skipInitialFetch, initialMessages])
+  }, [currentUser?.user_id, currentChannelId, currentDmUserId, parentMessageId, setMessages, skipInitialFetch, initialMessages])
 } 

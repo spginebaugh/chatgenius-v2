@@ -39,7 +39,7 @@ export async function formatMessageForDisplay(message: MessageWithJoins, current
   const supabase = await createClient()
 
   return {
-    id: message.id,
+    message_id: message.message_id,
     message: message.message || '', // Convert null to empty string
     message_type: message.message_type,
     user_id: message.user_id,
@@ -50,7 +50,7 @@ export async function formatMessageForDisplay(message: MessageWithJoins, current
     inserted_at: message.inserted_at,
     // Format profile with defaults
     profiles: {
-      id: message.profiles?.id || message.user_id,
+      user_id: message.profiles?.user_id || message.user_id,
       username: message.profiles?.username || 'Unknown',
       profile_picture_url: message.profiles?.profile_picture_url || null,
       status: message.profiles?.status || 'OFFLINE'

@@ -31,7 +31,7 @@ export async function requireAuth({ throwOnMissingProfile = false } = {}): Promi
     const { data: profile } = await supabase
       .from('users')
       .select('*')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single()
 
     if (!profile) {
@@ -85,7 +85,7 @@ export async function checkPermission({
       const { data } = await supabase
         .from('channels')
         .select('created_by')
-        .eq('id', resourceId)
+        .eq('channel_id', resourceId)
         .single()
       
       return data?.created_by === user.id
@@ -95,7 +95,7 @@ export async function checkPermission({
       const { data } = await supabase
         .from('messages')
         .select('user_id')
-        .eq('id', resourceId)
+        .eq('message_id', resourceId)
         .single()
       
       return data?.user_id === user.id

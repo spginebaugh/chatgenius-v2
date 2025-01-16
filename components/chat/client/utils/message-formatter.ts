@@ -1,61 +1,70 @@
-import type { MessageReaction, UserStatus } from '@/types/database'
-import type { UiMessage } from '@/types/messages-ui'
+import { UiMessage } from "@/types/messages-ui"
+import { MessageWithJoins } from "@/lib/client/hooks/messages/format-utils"
+import { formatReactions } from "@/lib/stores/messages/utils"
+import { FileType } from "@/types/database"
 import type { RawMessage, QueryConfig } from '../types'
 
-export function formatMessageForUi(message: RawMessage, currentUserId: string): UiMessage {
-  const baseMessage: UiMessage = {
-    id: message.id,
-    message: message.message || '',
-    message_type: message.message_type,
-    user_id: message.user_id,
-    channel_id: message.channel_id || 0,
-    receiver_id: message.receiver_id || '',
-    parent_message_id: message.parent_message_id,
-    inserted_at: message.inserted_at,
-    thread_count: message.thread_count,
-    profiles: message.profiles || {
-      id: message.user_id,
-      username: 'Unknown',
-      status: 'offline' as UserStatus,
-      profile_picture_url: null
-    },
-    files: message.files || [],
-    reactions: message.reactions?.map((reaction: MessageReaction) => ({
-      emoji: reaction.emoji,
-      count: 1,
-      reacted_by_me: reaction.user_id === currentUserId
-    })) || [],
-    thread_messages: message.thread_messages?.map((threadMsg) => ({
-      ...threadMsg,
-      message: threadMsg.message || '',
-      channel_id: threadMsg.channel_id || 0,
-      receiver_id: threadMsg.receiver_id || '',
-      thread_count: threadMsg.thread_count,
-      profiles: threadMsg.profiles || {
-        id: threadMsg.user_id,
-        username: 'Unknown',
-        status: 'offline' as UserStatus,
-        profile_picture_url: null
-      },
-      files: threadMsg.files || [],
-      reactions: []
-    })) || []
-  }
-
-  return baseMessage
+interface FileInfo {
+  file_id: number
+  file_type: FileType
+  file_url: string
 }
 
-export async function fetchAndFormatMessages(queryConfig: QueryConfig, currentUserId: string) {
-  const { query } = queryConfig
-  const { data: messages, error } = await query.order('inserted_at', { ascending: true })
-
-  if (error) {
-    throw new Error(`Error fetching messages: ${error.message}`)
+export function formatMessageForClient(message: MessageWithJoins, currentUserId: string): UiMessage {
+  return {
+    message_id: message.message_id,
+    message: message.message || '',
+    message_type: message.message_type,
+    user_id: message.user?.user_id || message.user_id,
+    channel_id: message.channel_id,
+    receiver_id: message.receiver_id,
+    parent_message_id: message.parent_message_id,
+    thread_count: message.thread_count,
+    inserted_at: message.inserted_at,
+    profiles: {
+      user_id: message.user?.user_id || message.user_id,
+      username: message.user?.username || 'Unknown',
+      profile_picture_url: null,
+      status: 'OFFLINE'
+    },
+    files: message.files?.map((file: FileInfo) => ({
+      url: file.file_url,
+      type: file.file_type,
+      name: file.file_url.split('/').pop() || 'file'
+    })) || [],
+    reactions: formatReactions(message.reactions || [], currentUserId)
   }
+}
 
-  if (!messages) {
+export function formatMessagesForClient(messages: RawMessage[], currentUserId: string, queryConfig: QueryConfig) {
+  if (!messages.length) {
     return []
   }
 
-  return messages.map((message: RawMessage) => formatMessageForUi(message, currentUserId))
+  return messages.map((message: RawMessage) => {
+    const messageWithJoins: MessageWithJoins = {
+      message_id: message.message_id,
+      message: message.message || '',
+      message_type: message.message_type,
+      user_id: message.user_id,
+      channel_id: message.channel_id,
+      receiver_id: message.receiver_id,
+      parent_message_id: message.parent_message_id,
+      thread_count: message.thread_count,
+      inserted_at: message.inserted_at,
+      user: message.profiles ? {
+        user_id: message.profiles.user_id,
+        username: message.profiles.username || 'Unknown'
+      } : undefined,
+      files: message.files,
+      reactions: message.reactions
+    }
+    return formatMessageForClient(messageWithJoins, currentUserId)
+  })
+}
+
+export async function fetchAndFormatMessages(queryConfig: QueryConfig, currentUserId: string) {
+  const { data: messages } = await queryConfig.query
+  if (!messages?.length) return []
+  return formatMessagesForClient(messages, currentUserId, queryConfig)
 } 

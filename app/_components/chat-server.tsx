@@ -3,6 +3,7 @@ import { createClient } from "@/app/_lib/supabase-server"
 import { ChatClient } from "@/components/chat"
 import { DbMessage as Message, Channel, User, MessageReaction, MessageType, MessageFile, UserStatus } from "@/types/database"
 import { UiMessage, UiMessageReaction } from "@/types/messages-ui"
+import { ChatViewData } from "@/components/chat/shared/types"
 import { requireAuth } from '@/app/_lib/auth'
 import { getChannels, getUsers } from '@/app/_lib'
 
@@ -15,7 +16,7 @@ interface ChatServerProps {
 type NoThreadMessage = Omit<UiMessage, 'thread_messages'>
 
 const MESSAGE_QUERY = `
-  id,
+  message_id,
   message,
   message_type,
   user_id,
@@ -25,18 +26,18 @@ const MESSAGE_QUERY = `
   thread_count,
   inserted_at,
   profiles:users!messages_user_id_fkey (
-    id,
+    user_id,
     username,
     profile_picture_url,
     status
   ),
   files:message_files (
-    id,
+    file_id,
     file_type,
     file_url
   ),
   reactions:message_reactions (
-    id,
+    reaction_id,
     emoji,
     user_id,
     message_id,
@@ -49,7 +50,7 @@ async function fetchViewData(viewType: "channel" | "dm", id: string) {
   const { data: currentView } = await supabase
     .from(viewType === "channel" ? "channels" : "users")
     .select("*")
-    .eq("id", id)
+    .eq(viewType === "channel" ? "channel_id" : "user_id", id)
     .single()
 
   if (!currentView) {
@@ -76,8 +77,8 @@ async function fetchCurrentUser(userId: string) {
   const supabase = await createClient()
   const { data: currentUser } = await supabase
     .from("users")
-    .select("id, username, bio, profile_picture_url, last_active_at, status, inserted_at")
-    .eq("id", userId)
+    .select("user_id, username, bio, profile_picture_url, last_active_at, status, inserted_at")
+    .eq("user_id", userId)
     .single()
 
   if (!currentUser) {
@@ -106,7 +107,7 @@ function formatReactionsForDisplay(reactions: MessageReaction[], currentUserId: 
 
 function formatMessage(msg: any, currentUserId: string): UiMessage {
   return {
-    id: msg.id,
+    message_id: msg.message_id,
     message: msg.message,
     message_type: msg.message_type,
     user_id: msg.user_id,
@@ -116,7 +117,7 @@ function formatMessage(msg: any, currentUserId: string): UiMessage {
     thread_count: msg.thread_count,
     inserted_at: msg.inserted_at,
     profiles: {
-      id: msg.profiles.id,
+      user_id: msg.profiles.user_id,
       username: msg.profiles.username || 'Unknown',
       profile_picture_url: msg.profiles.profile_picture_url,
       status: msg.profiles.status

@@ -38,48 +38,48 @@ function useMessageHandlers(props: {
     const messageWithJoins: MessageWithJoins = {
       ...message,
       profiles: {
-        id: message.user_id,
-        username: props.users.find(u => u.id === message.user_id)?.username || null,
-        profile_picture_url: props.users.find(u => u.id === message.user_id)?.profile_picture_url || null,
-        status: props.users.find(u => u.id === message.user_id)?.status || null
+        user_id: message.user_id,
+        username: props.users.find(u => u.user_id === message.user_id)?.username || null,
+        profile_picture_url: props.users.find(u => u.user_id === message.user_id)?.profile_picture_url || null,
+        status: props.users.find(u => u.user_id === message.user_id)?.status || null
       },
       files: null,
       reactions: null
     }
-    const displayMessage = formatMessageForClient(messageWithJoins, props.currentUser.id)
+    const displayMessage = formatMessageForClient(messageWithJoins, props.currentUser.user_id)
     addMessage(props.messageType, props.key, displayMessage)
-  }, [props.key, props.messageType, props.currentUser.id, props.users, addMessage])
+  }, [props.key, props.messageType, props.currentUser.user_id, props.users, addMessage])
 
   const handleMessageDelete = useCallback((message: DbMessage) => {
-    deleteMessage(props.messageType, props.key, message.id)
+    deleteMessage(props.messageType, props.key, message.message_id)
   }, [props.key, props.messageType, deleteMessage])
 
   const handleMessageUpdate = useCallback((message: DbMessage) => {
     const messageWithJoins: MessageWithJoins = {
       ...message,
       profiles: {
-        id: message.user_id,
-        username: props.users.find(u => u.id === message.user_id)?.username || null,
-        profile_picture_url: props.users.find(u => u.id === message.user_id)?.profile_picture_url || null,
-        status: props.users.find(u => u.id === message.user_id)?.status || null
+        user_id: message.user_id,
+        username: props.users.find(u => u.user_id === message.user_id)?.username || null,
+        profile_picture_url: props.users.find(u => u.user_id === message.user_id)?.profile_picture_url || null,
+        status: props.users.find(u => u.user_id === message.user_id)?.status || null
       },
       files: null,
       reactions: null
     }
-    const displayMessage = formatMessageForClient(messageWithJoins, props.currentUser.id)
+    const displayMessage = formatMessageForClient(messageWithJoins, props.currentUser.user_id)
     const messages = useMessagesStore.getState().messages[props.messageType][props.key] || []
     setMessages(props.messageType, props.key, messages.map(msg => 
-      msg.id === message.id ? {
+      msg.message_id === message.message_id ? {
         ...displayMessage,
         reactions: msg.reactions
       } : msg
     ))
-  }, [props.key, props.messageType, props.currentUser.id, props.users, setMessages])
+  }, [props.key, props.messageType, props.currentUser.user_id, props.users, setMessages])
 
   const handleReactionUpdate = useCallback((messageId: number, reactions: MessageReaction[]) => {
-    const displayReactions = formatReactions(reactions, props.currentUser.id)
+    const displayReactions = formatReactions(reactions, props.currentUser.user_id)
     updateReactions(props.messageType, props.key, messageId, displayReactions)
-  }, [props.key, props.messageType, props.currentUser.id, updateReactions])
+  }, [props.key, props.messageType, props.currentUser.user_id, updateReactions])
 
   return {
     handleNewMessage,

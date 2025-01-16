@@ -13,7 +13,7 @@ export function MessageReactions({ message, onEmojiSelect }: MessageReactionsPro
       {message.reactions.map((reaction) => (
         <button
           key={reaction.emoji}
-          onClick={() => onEmojiSelect?.(message.id, reaction.emoji)}
+          onClick={() => onEmojiSelect?.(message.message_id, reaction.emoji)}
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
             reaction.reacted_by_me 
               ? 'bg-gray-100 border-gray-300' 

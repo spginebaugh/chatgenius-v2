@@ -15,7 +15,7 @@ export function useLogout(currentUser: User) {
           status: 'OFFLINE',
           last_active_at: new Date().toISOString()
         })
-        .eq('id', currentUser.id)
+        .eq('user_id', currentUser.user_id)
 
       if (updateError) {
         console.error("Failed to update user status:", updateError.message)

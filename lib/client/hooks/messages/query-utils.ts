@@ -6,20 +6,24 @@ export interface MessageQueryParams {
   parentMessageId?: number
 }
 
+export const messageFields = `
+  profiles:users!messages_user_id_fkey(user_id, username),
+  message_files(file_id, file_type, file_url),
+  message_id,
+  message,
+  message_type,
+  user_id,
+  channel_id,
+  receiver_id,
+  parent_message_id,
+  thread_count,
+  inserted_at
+`
+
 export function buildMessageQuery(supabase: ReturnType<typeof createClient>, params: MessageQueryParams) {
   let query = supabase
     .from('messages')
-    .select(`
-      *,
-      profiles:users!messages_user_id_fkey(id, username),
-      reactions:message_reactions(
-        id,
-        message_id,
-        user_id,
-        emoji,
-        inserted_at
-      )
-    `)
+    .select(messageFields)
 
   if (params.channelId) query = query.eq('channel_id', params.channelId)
   if (params.receiverId) query = query.eq('receiver_id', params.receiverId)

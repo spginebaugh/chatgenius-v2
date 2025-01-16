@@ -7,7 +7,7 @@ import type { UiMessage } from '@/types/messages-ui'
  */
 export interface MessageWithJoins extends DbMessage {
   profiles: {
-    id: string
+    user_id: string
     username: string | null
     profile_picture_url: string | null
     status: UserStatus | null
@@ -23,7 +23,7 @@ export type NoThreadMessage = Omit<UiMessage, 'thread_messages'>
 export const BASE_MESSAGE_QUERY = `
   *,
   profiles:users!messages_user_id_fkey(
-    id,
+    user_id,
     username
   ),
   files:message_files(*),
@@ -33,7 +33,7 @@ export const BASE_MESSAGE_QUERY = `
 export const THREAD_MESSAGE_QUERY = `
   *,
   profiles:users!messages_user_id_fkey(
-    id,
+    user_id,
     username
   ),
   files:message_files(*),

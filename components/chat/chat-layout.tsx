@@ -29,7 +29,7 @@ export function ChatLayout({
   const { handleMainMessage } = useMessageHandling()
 
   const handleThreadClick = (messageId: number) => {
-    const message = messages.find(m => m.id === messageId)
+    const message = messages.find(m => m.message_id === messageId)
     if (message) setSelectedMessage(message)
   }
 
@@ -39,7 +39,7 @@ export function ChatLayout({
 
   const handleMessageSend = (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => {
     if (selectedMessage) {
-      return handleMainMessage(message, initialView, files, isRagQuery, selectedMessage.id)
+      return handleMainMessage(message, initialView, files, isRagQuery, selectedMessage.message_id)
     }
     return handleMainMessage(message, initialView, files, isRagQuery)
   }
@@ -70,7 +70,7 @@ export function ChatLayout({
           {selectedMessage && (
             <ThreadPanel 
               selectedMessage={selectedMessage}
-              currentUserId={currentUser.id}
+              currentUserId={currentUser.user_id}
               onSendMessage={handleMessageSend}
               onClose={handleThreadClose}
               onEmojiSelect={onEmojiSelect}

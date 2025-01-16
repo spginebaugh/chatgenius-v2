@@ -3,6 +3,7 @@
 // Imports
 // -----------------------------------------------
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 
 // Types
 // -----------------------------------------------
@@ -33,15 +34,13 @@ function ChannelList({ channels, currentView }: ChannelListProps) {
       <h2 className="text-white font-semibold mb-2">Channels</h2>
       <ul className="space-y-1">
         {channels.map((channel) => (
-          <li key={channel.id}>
+          <li key={channel.channel_id}>
             <Link
-              href={`/channel/${channel.id}`}
-              className={`block px-2 py-1 rounded ${
-                currentView.type === 'channel' && 
-                (currentView.data as Channel).id === channel.id
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-              }`}
+              href={`/channel/${channel.channel_id}`}
+              className={cn(
+                'block px-2 py-1 hover:bg-gray-100',
+                (currentView.data as Channel).channel_id === channel.channel_id && 'bg-gray-100'
+              )}
             >
               # {channel.slug}
             </Link>
@@ -58,15 +57,13 @@ function DirectMessageList({ users, currentView }: DirectMessageListProps) {
       <h2 className="text-white font-semibold mb-2">Direct Messages</h2>
       <ul className="space-y-1">
         {users.map((user) => (
-          <li key={user.id}>
+          <li key={user.user_id}>
             <Link
-              href={`/dm/${user.id}`}
-              className={`flex items-center px-2 py-1 rounded ${
-                currentView.type === 'dm' && 
-                (currentView.data as User).id === user.id
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-              }`}
+              href={`/dm/${user.user_id}`}
+              className={cn(
+                'block px-2 py-1 hover:bg-gray-100',
+                (currentView.data as User).user_id === user.user_id && 'bg-gray-100'
+              )}
             >
               <UserAvatar 
                 username={user.username}

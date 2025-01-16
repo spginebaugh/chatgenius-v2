@@ -1,11 +1,9 @@
 'use server'
 
-import { createClient } from "@/app/_lib/supabase-server"
-import { revalidatePath } from "next/cache"
-import { requireAuth } from "@/app/_lib/auth"
+import { requireAuth } from '@/app/_lib/auth'
 import { updateRecord, selectRecords } from '@/app/_lib/supabase'
 import type { User } from '@/types/database'
-import { redirect } from "next/navigation"
+import type { User as AuthUser } from '@supabase/supabase-js'
 
 interface ValidationResult {
   isValid: boolean
@@ -13,34 +11,39 @@ interface ValidationResult {
 }
 
 function validateUsername(username: string): ValidationResult {
-  if (!username?.trim()) {
-    return { isValid: false, error: "Username is required" }
+  if (!username) {
+    return { isValid: false, error: 'Username is required' }
   }
-
+  
   if (username.length < 3) {
-    return { isValid: false, error: "Username must be at least 3 characters long" }
+    return { isValid: false, error: 'Username must be at least 3 characters' }
   }
-
-  if (username.length > 30) {
-    return { isValid: false, error: "Username must be at most 30 characters long" }
+  
+  if (username.length > 20) {
+    return { isValid: false, error: 'Username must be less than 20 characters' }
   }
-
+  
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return { isValid: false, error: 'Username can only contain letters, numbers, and underscores' }
+  }
+  
   return { isValid: true }
 }
 
 async function checkUsernameAvailability(username: string, currentUserId: string): Promise<ValidationResult> {
   const existingUser = await selectRecords<User>({
     table: 'users',
-    match: { username: username.trim() },
+    select: 'user_id',
+    match: { username },
     options: {
       errorMap: {
         NOT_FOUND: { message: 'No user found', status: 404 }
       }
     }
-  }).catch(() => null)
+  })
 
-  if (existingUser?.length && existingUser[0]?.id !== currentUserId) {
-    return { isValid: false, error: "Username is already taken" }
+  if (existingUser?.length && existingUser[0]?.user_id !== currentUserId) {
+    return { isValid: false, error: 'Username is already taken' }
   }
 
   return { isValid: true }
@@ -53,7 +56,7 @@ async function performUsernameUpdate(userId: string, username: string): Promise<
       username: username.trim(),
       last_active_at: new Date().toISOString()
     },
-    match: { id: userId },
+    match: { user_id: userId },
     options: {
       revalidatePath: '/',
       errorMap: {
@@ -68,7 +71,7 @@ async function performUsernameUpdate(userId: string, username: string): Promise<
 
 export async function updateUsername({ username }: { username: string }): Promise<{ error?: string }> {
   try {
-    const user = await requireAuth()
+    const authUser = await requireAuth()
 
     // Validate username format
     const validationResult = validateUsername(username)
@@ -77,13 +80,13 @@ export async function updateUsername({ username }: { username: string }): Promis
     }
 
     // Check username availability
-    const availabilityResult = await checkUsernameAvailability(username, user.id)
+    const availabilityResult = await checkUsernameAvailability(username, authUser.id)
     if (!availabilityResult.isValid) {
       return { error: availabilityResult.error }
     }
 
     // Update username
-    await performUsernameUpdate(user.id, username)
+    await performUsernameUpdate(authUser.id, username)
 
     return {}
   } catch (error) {

@@ -28,7 +28,7 @@ interface UseUserLogoutProps {
 // User Profile Formatting
 export function createUiProfile(user: User | undefined, fallbackId: string): UiProfile {
   return {
-    id: user?.id || fallbackId,
+    user_id: user?.user_id || fallbackId,
     username: user?.username || 'Unknown',
     profile_picture_url: user?.profile_picture_url || null,
     status: user?.status || 'OFFLINE'
@@ -51,13 +51,13 @@ function useUserState(initialUsers: User[], initialCurrentUser: User): UseUserSt
 // User Update Handler
 function useUserUpdate({ currentUser, setCurrentUser, setUsers }: UseUserUpdateProps) {
   return useCallback((updatedUser: User) => {
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
+    setUsers(prev => prev.map(u => u.user_id === updatedUser.user_id ? updatedUser : u))
     
     // Update current user if it's them
-    if (updatedUser.id === currentUser.id) {
+    if (updatedUser.user_id === currentUser.user_id) {
       setCurrentUser(updatedUser)
     }
-  }, [currentUser.id, setCurrentUser, setUsers])
+  }, [currentUser.user_id, setCurrentUser, setUsers])
 }
 
 // Database Operations
@@ -69,7 +69,7 @@ async function updateUserStatus(userId: string, status: 'OFFLINE' | 'ONLINE') {
       status,
       last_active_at: new Date().toISOString()
     })
-    .eq('id', userId)
+    .eq('user_id', userId)
 
   if (error) {
     throw new Error(`Failed to update user status: ${error.message}`)
@@ -98,10 +98,10 @@ function useUserLogout({ currentUser, setCurrentUser, setUsers }: UseUserLogoutP
       
       // Update local state first for immediate UI feedback
       setCurrentUser(updatedUser)
-      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
+      setUsers(prev => prev.map(u => u.user_id === updatedUser.user_id ? updatedUser : u))
 
       // Update database and sign out
-      await updateUserStatus(currentUser.id, 'OFFLINE')
+      await updateUserStatus(currentUser.user_id, 'OFFLINE')
       await signOutUser()
     } catch (error) {
       console.error("Logout failed:", error instanceof Error ? error.message : 'Unknown error')

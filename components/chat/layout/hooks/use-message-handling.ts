@@ -15,8 +15,8 @@ export function useMessageHandling() {
         message,
         files,
         isRagQuery,
-        channelId: currentView.type === 'channel' ? (currentView.data as Channel).id : undefined,
-        receiverId: currentView.type === 'dm' ? (currentView.data as User).id : undefined,
+        channelId: currentView.type === 'channel' ? (currentView.data as Channel).channel_id : undefined,
+        receiverId: currentView.type === 'dm' ? (currentView.data as User).user_id : undefined,
         parentMessageId
       })
     } catch (error) {

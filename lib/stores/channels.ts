@@ -37,7 +37,7 @@ export const useChannelsStore = createStore<ChannelsState>({
   setChannels: (channels) =>
     useChannelsStore.setState(state => ({
       channels: channels.reduce((acc, channel) => {
-        acc[channel.id] = channel
+        acc[channel.channel_id] = channel
         return acc
       }, {} as Record<number, Channel>)
     })),
@@ -60,7 +60,7 @@ export const useChannelsStore = createStore<ChannelsState>({
     useChannelsStore.setState(state => ({
       channels: {
         ...state.channels,
-        [channel.id]: channel
+        [channel.channel_id]: channel
       }
     })),
 

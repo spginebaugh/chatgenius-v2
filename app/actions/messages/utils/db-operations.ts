@@ -34,7 +34,7 @@ export async function refreshMessageWithFiles(messageId: number) {
   const { data: message, error } = await supabase
     .from('messages')
     .select(MESSAGE_SELECT_QUERY)
-    .eq('id', messageId)
+    .eq('message_id', messageId)
     .single()
 
   if (error) throw new Error(error.message)
@@ -52,7 +52,7 @@ export function formatMessageResponse(message: DbMessage & {
   return {
     ...message,
     profiles: message.profiles || {
-      id: message.user_id,
+      user_id: message.user_id,
       username: 'Unknown'
     },
     reactions: message.reactions || [],

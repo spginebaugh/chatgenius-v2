@@ -43,7 +43,7 @@ export async function sendChannelMessage({
       message_type: 'channel',
       inserted_at: new Date().toISOString()
     },
-    select: 'id',
+    select: 'message_id',
     options: {
       revalidatePath: '/channel/[id]'
     }
@@ -52,7 +52,7 @@ export async function sendChannelMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.id,
+      messageId: messageData.message_id,
       files,
       userId
     })
@@ -80,7 +80,7 @@ export async function sendDirectMessage({
       message_type: 'direct',
       inserted_at: new Date().toISOString()
     },
-    select: 'id',
+    select: 'message_id',
     options: {
       revalidatePath: '/dm/[id]'
     }
@@ -89,7 +89,7 @@ export async function sendDirectMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.id,
+      messageId: messageData.message_id,
       files,
       userId
     })
@@ -117,7 +117,7 @@ export async function sendThreadMessage({
       message_type: 'thread',
       inserted_at: new Date().toISOString()
     },
-    select: 'id',
+    select: 'message_id',
     options: {
       // Revalidate the primary path
       revalidatePath: '/channel/[id]'
@@ -127,7 +127,7 @@ export async function sendThreadMessage({
   // Handle file attachments if present
   if (files?.length) {
     await handleFileAttachments({
-      messageId: messageData.id,
+      messageId: messageData.message_id,
       files,
       userId
     })

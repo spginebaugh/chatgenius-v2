@@ -92,7 +92,7 @@ async function handleMessageEvent(
 
   if (eventType === 'DELETE' && payload.old) {
     const message = payload.old as DbMessage
-    handlers.deleteMessage(context.messageType, context.storeKey, message.id)
+    handlers.deleteMessage(context.messageType, context.storeKey, message.message_id)
     handlers.onMessageDelete?.(message)
     return
   }

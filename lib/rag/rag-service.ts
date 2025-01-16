@@ -162,7 +162,7 @@ export async function getDocumentStatus(fileId: number): Promise<{
   const { data, error } = await supabase
     .from('message_files')
     .select('vector_status')
-    .eq('id', fileId)
+    .eq('file_id', fileId)
     .single()
     
   if (error) {

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client"
 import type { UiMessage } from "@/types/messages-ui"
 import { formatMessageWithJoins } from "../utils/message-formatter"
+import { useCallback } from "react"
 
 export function useMessageOperations(selectedMessage: UiMessage, currentUserId: string) {
   const supabase = createClient()
@@ -11,7 +12,7 @@ export function useMessageOperations(selectedMessage: UiMessage, currentUserId: 
       .select(`
         *,
         profiles:users!messages_user_id_fkey(
-          id,
+          user_id,
           username,
           profile_picture_url,
           status
@@ -19,12 +20,22 @@ export function useMessageOperations(selectedMessage: UiMessage, currentUserId: 
         files:message_files(*),
         reactions:message_reactions(*)
       `)
-      .eq('id', messageId)
+      .eq('message_id', messageId)
       .single()
 
     if (!messageWithJoins) return null
     return formatMessageWithJoins(messageWithJoins, currentUserId)
   }
 
-  return { fetchAndFormatMessage }
-} 
+  const deleteMessage = useCallback(async (messageId: number) => {
+    await supabase
+      .from('messages')
+      .delete()
+      .eq('message_id', messageId)
+  }, [])
+
+  return {
+    fetchAndFormatMessage,
+    deleteMessage
+  }
+}

@@ -3,7 +3,7 @@ import type { UiProfile, UiMessage } from '@/types/messages-ui'
 import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
 
 export interface ChatClientFetchProps {
-  currentUser: Pick<User, 'id'>
+  currentUser: Pick<User, 'user_id'>
   currentChannelId?: number
   currentDmUserId?: string
   parentMessageId?: number

@@ -34,13 +34,13 @@ export function formatReactions(reactions: MessageReaction[], currentUserId?: st
 
 /**
  * Client-side message formatter that doesn't require server components
- */
+ */ 
 export function formatMessageForClient(message: MessageWithJoins, currentUserId?: string): UiMessage {
   return {
-    id: message.id,
+    message_id: message.message_id,
     message: message.message || '', // Convert null to empty string
     message_type: message.message_type,
-    user_id: message.user_id,
+    user_id: message.user_id, 
     channel_id: message.channel_id,
     receiver_id: message.receiver_id,
     parent_message_id: message.parent_message_id,
@@ -48,7 +48,7 @@ export function formatMessageForClient(message: MessageWithJoins, currentUserId?
     inserted_at: message.inserted_at,
     // Format profile with defaults
     profiles: {
-      id: message.profiles?.id || message.user_id,
+      user_id: message.profiles?.user_id || message.user_id,
       username: message.profiles?.username || 'Unknown',
       profile_picture_url: message.profiles?.profile_picture_url || null,
       status: message.profiles?.status || 'OFFLINE'

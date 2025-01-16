@@ -22,7 +22,7 @@ export async function getCurrentUser(): Promise<User | null> {
   const { data: profile, error } = await supabase
     .from('users')
     .select('*')
-    .eq('id', user.id)
+    .eq('user_id', user.id)
     .single()
 
   if (error) throw error

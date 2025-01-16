@@ -108,7 +108,7 @@ export async function sendMessage(props: SendMessageProps) {
   const messageData = await insertRecord<DbMessage>({
     table: 'messages',
     data: createMessageData(props, user.id),
-    select: 'id',
+    select: 'message_id',
     options: {
       revalidatePath,
       errorMap: {
@@ -122,7 +122,7 @@ export async function sendMessage(props: SendMessageProps) {
 
   // Handle file attachments if present
   if (props.files?.length) {
-    await insertMessageFiles(props.files, messageData.id, revalidatePath)
+    await insertMessageFiles(props.files, messageData.message_id, revalidatePath)
   }
 
   return messageData

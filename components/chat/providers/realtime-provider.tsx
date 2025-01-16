@@ -22,7 +22,7 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   useRealtimeChannels({
     onChannelUpdate: (channel) => {
       console.log("Realtime channel update:", channel)
-      setActiveChannel(channel.id)
+      setActiveChannel(channel.channel_id)
     }
   })
 

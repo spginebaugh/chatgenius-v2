@@ -8,14 +8,13 @@ import { RagMessage } from "./rag-message"
 import type { UiMessage, UiMessageReaction } from "@/types/messages-ui"
 import DOMPurify from "isomorphic-dompurify"
 import { marked } from "marked"
-import { SmileIcon, MessageSquareIcon } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { EMOJI_LIST } from "../../shared"
-import { Button } from "@/components/ui/button"
+import { MessageSquare } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { EmojiButton } from "../../thread/components/emoji-button"
 
 interface MessageItemProps {
   message: UiMessage
-  onReactionSelect: (messageId: number, emoji: string) => void
+  onReactionSelect: (messageId: number, emoji: string) => Promise<void>
   onThreadSelect: (messageId: number) => void
   isThreadMessage?: boolean
   isStreaming?: boolean
@@ -68,66 +67,33 @@ export function MessageItem({
           <MessageFiles files={message.files} />
         )}
 
-        <div className="flex items-center gap-4 mt-1">
-          <div className="flex items-center gap-2">
-            {message.reactions && message.reactions.length > 0 && message.reactions.map((reaction, index) => (
-              <button
-                key={index}
-                onClick={() => onReactionSelect(message.id, reaction.emoji)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                  reaction.reacted_by_me
-                    ? 'bg-gray-200 text-gray-900'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <span>{reaction.emoji}</span>
-                <span>{reaction.count}</span>
-              </button>
-            ))}
-          </div>
-
-          {!isThreadMessage && (
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="ghost"
-                    size="sm"
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    <SmileIcon className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-2">
-                  <div className="grid grid-cols-4 gap-2">
-                    {EMOJI_LIST.map((emoji) => (
-                      <Button
-                        key={emoji}
-                        variant="ghost"
-                        className="h-8 px-2"
-                        onClick={() => onReactionSelect(message.id, emoji)}
-                      >
-                        {emoji}
-                      </Button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {message.message_type !== 'thread' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                  onClick={() => onThreadSelect(message.id)}
-                >
-                  <MessageSquareIcon className="h-4 w-4 mr-1" />
-                  {message.thread_count > 0 && (
-                    <span>{message.thread_count}</span>
-                  )}
-                </Button>
+        <div className="flex items-center space-x-2">
+          {message.reactions.map((reaction) => (
+            <button
+              key={reaction.emoji}
+              className={cn(
+                'px-2 py-1 rounded hover:bg-gray-100',
+                reaction.reacted_by_me && 'bg-gray-100'
               )}
-            </div>
+              onClick={() => onReactionSelect(message.message_id, reaction.emoji)}
+            >
+              {reaction.emoji} {reaction.count}
+            </button>
+          ))}
+          <EmojiButton
+            messageId={message.message_id}
+            onEmojiSelect={onReactionSelect}
+          />
+          {!isThreadMessage && (
+            <button
+              className="text-gray-500 hover:text-gray-700"
+              onClick={() => onThreadSelect(message.message_id)}
+            >
+              <MessageSquare className="w-4 h-4" />
+              {message.thread_count > 0 && (
+                <span className="ml-1">{message.thread_count}</span>
+              )}
+            </button>
           )}
         </div>
       </div>

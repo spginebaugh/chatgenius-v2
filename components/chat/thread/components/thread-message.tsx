@@ -24,7 +24,7 @@ export function ThreadMessage({ message, onEmojiSelect }: ThreadMessageProps) {
             {message.profiles?.username || 'Unknown User'}
           </span>
           <MessageTime timestamp={message.inserted_at} />
-          <EmojiButton messageId={message.id} onEmojiSelect={onEmojiSelect} />
+          <EmojiButton messageId={message.message_id} onEmojiSelect={onEmojiSelect} />
         </div>
         <div className="text-gray-700 text-sm prose prose-sm max-w-none">
           <ReactMarkdown>{message.message}</ReactMarkdown>

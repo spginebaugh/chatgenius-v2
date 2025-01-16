@@ -22,7 +22,7 @@ interface SubscriptionRefs {
 // Type guard to ensure a channel has all required fields
 function isCompleteChannel(channel: Partial<Channel>): channel is Channel {
   return !!(
-    channel.id &&
+    channel.channel_id &&
     channel.slug &&
     channel.created_by &&
     channel.inserted_at

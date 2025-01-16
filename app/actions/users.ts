@@ -28,7 +28,7 @@ export async function updateUserProfile({ username, profile_picture_url, bio }: 
       last_active_at: new Date().toISOString()
     },
     match: {
-      id: user.id
+      user_id: user.id
     },
     options: {
       revalidatePath: '/settings/profile',
@@ -52,7 +52,7 @@ export async function updateUserStatus({ status }: UpdateUserStatusProps) {
       last_active_at: new Date().toISOString()
     },
     match: {
-      id: user.id
+      user_id: user.id
     },
     options: {
       revalidatePath: '/channel/[id]',

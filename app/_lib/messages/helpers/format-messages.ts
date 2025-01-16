@@ -11,14 +11,14 @@ interface FormatBasicMessageProps {
 export function formatBasicMessage({ message }: FormatBasicMessageProps): Partial<BaseUiMessage> {
   if (!message) {
     return {
-      id: 0,
+      message_id: 0,
       message: '',
       inserted_at: new Date().toISOString(),
     }
   }
 
   return {
-    id: message.id || 0,
+    message_id: message.message_id || 0,
     message: message.message || '',
     inserted_at: message.inserted_at || new Date().toISOString(),
   }

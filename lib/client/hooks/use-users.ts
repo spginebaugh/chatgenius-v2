@@ -17,7 +17,7 @@ function compareUsers(a: User[], b: User[]): boolean {
   
   return a.every((userA, index) => {
     const userB = b[index]
-    return userA.id === userB.id &&
+    return userA.user_id === userB.user_id &&
       userA.username === userB.username &&
       userA.bio === userB.bio &&
       userA.profile_picture_url === userB.profile_picture_url &&

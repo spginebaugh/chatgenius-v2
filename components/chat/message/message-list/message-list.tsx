@@ -6,7 +6,7 @@ import type { UiMessage } from "@/types/messages-ui"
 
 interface MessageListProps {
   messages: UiMessage[]
-  onReactionSelect: (messageId: number, emoji: string) => void
+  onReactionSelect: (messageId: number, emoji: string) => Promise<void>
   onThreadSelect: (messageId: number) => void
   isThreadView?: boolean
 }
@@ -20,13 +20,14 @@ export function MessageList({
   return (
     <div className="h-full">
       {messages.map((message) => (
-        <MessageItem
-          key={message.id}
-          message={message}
-          onReactionSelect={onReactionSelect}
-          onThreadSelect={onThreadSelect}
-          isThreadMessage={isThreadView}
-        />
+        <li key={message.message_id}>
+          <MessageItem
+            message={message}
+            onReactionSelect={onReactionSelect}
+            onThreadSelect={onThreadSelect}
+            isThreadMessage={isThreadView}
+          />
+        </li>
       ))}
     </div>
   )

@@ -16,7 +16,7 @@ function compareChannels(a: Channel[], b: Channel[]): boolean {
   
   return a.every((channelA, index) => {
     const channelB = b[index]
-    return channelA.id === channelB.id &&
+    return channelA.channel_id === channelB.channel_id &&
       channelA.slug === channelB.slug &&
       channelA.created_by === channelB.created_by
   })

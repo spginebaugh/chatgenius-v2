@@ -10,7 +10,7 @@ export function buildMessageQuery(supabase: ReturnType<typeof createClient>) {
     .select(`
       *,
       profiles:users!messages_user_id_fkey(
-        id,
+        user_id,
         username,
         profile_picture_url,
         status
@@ -46,7 +46,7 @@ export function configureQueryParams({
   } else if (currentDmUserId) {
     query = query
       .eq('message_type', 'direct')
-      .or(`and(user_id.eq.${currentUser.id},receiver_id.eq.${currentDmUserId}),and(user_id.eq.${currentDmUserId},receiver_id.eq.${currentUser.id})`)
+      .or(`and(user_id.eq.${currentUser.user_id},receiver_id.eq.${currentDmUserId}),and(user_id.eq.${currentDmUserId},receiver_id.eq.${currentUser.user_id})`)
     messageType = 'dms'
     storeKey = currentDmUserId
   } else {

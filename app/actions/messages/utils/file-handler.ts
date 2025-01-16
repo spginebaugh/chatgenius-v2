@@ -34,7 +34,7 @@ export async function processFileAttachment(params: {
       await supabase
         .from('message_files')
         .update({ vector_status: 'processing' })
-        .eq('id', fileData.id)
+        .eq('file_id', fileData.id)
 
       // Download file content
       const { data: fileContent, error: downloadError } = await supabase.storage
@@ -54,7 +54,7 @@ export async function processFileAttachment(params: {
       await supabase
         .from('message_files')
         .update({ vector_status: 'completed' })
-        .eq('id', fileData.id)
+        .eq('file_id', fileData.id)
 
     } catch (error) {
       console.error('Error processing file for RAG:', error)
@@ -62,7 +62,7 @@ export async function processFileAttachment(params: {
       await supabase
         .from('message_files')
         .update({ vector_status: 'failed' })
-        .eq('id', fileData.id)
+        .eq('file_id', fileData.id)
     }
   }
 

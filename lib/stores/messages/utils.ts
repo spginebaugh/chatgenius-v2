@@ -9,13 +9,13 @@ export function getStoreKey(type: MessageStoreType, id: string | number): string
 
 // Message Formatting
 interface DefaultProfile {
-  id: string
+  user_id: string
   username: string
 }
 
 function createDefaultProfile(userId: string): DefaultProfile {
   return {
-    id: userId,
+    user_id: userId,
     username: 'Unknown'
   }
 }
@@ -45,7 +45,7 @@ function mergeMessageProperties(existingMsg: UiMessage, newMsg: UiMessage): UiMe
 }
 
 function createMessageMap(messages: UiMessage[]): Map<number, UiMessage> {
-  return new Map(messages.map(msg => [msg.id, msg]))
+  return new Map(messages.map(msg => [msg.message_id, msg]))
 }
 
 function sortMessagesByTimestamp(messages: UiMessage[]): UiMessage[] {
@@ -60,14 +60,14 @@ function mergeNewMessages(
   existingMessageMap: Map<number, UiMessage>
 ): UiMessage[] {
   return newMessages.reduce((acc: UiMessage[], newMsg) => {
-    const existingMsg = existingMessageMap.get(newMsg.id)
+    const existingMsg = existingMessageMap.get(newMsg.message_id)
     if (existingMsg) {
       acc.push(mergeMessageProperties(existingMsg, newMsg))
     } else {
       acc.push(formatMessageDefaults(newMsg))
     }
     return acc
-  }, [...existingMessages.filter(msg => !newMessages.some(newMsg => newMsg.id === msg.id))])
+  }, [...existingMessages.filter(msg => !newMessages.some(newMsg => newMsg.message_id === msg.message_id))])
 }
 
 export function mergeMessages(existingMessages: UiMessage[], newMessages: UiMessage[]): UiMessage[] {

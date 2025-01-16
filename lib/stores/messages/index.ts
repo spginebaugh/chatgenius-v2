@@ -19,7 +19,7 @@ const initialState = {
 
 // Message Update Helpers
 function updateMessageInList(messages: UiMessage[], messageId: number, updater: (msg: UiMessage) => UiMessage): UiMessage[] {
-  return messages.map(msg => msg.id === messageId ? updater(msg) : msg)
+  return messages.map(msg => msg.message_id === messageId ? updater(msg) : msg)
 }
 
 function sortMessagesByDate(messages: UiMessage[]): UiMessage[] {
@@ -56,7 +56,7 @@ function handleExistingMessage(existingMessage: UiMessage, newMessage: UiMessage
 }
 
 function addMessageToList(messages: UiMessage[], message: UiMessage): UiMessage[] {
-  const existingIndex = messages.findIndex(msg => msg.id === message.id)
+  const existingIndex = messages.findIndex(msg => msg.message_id === message.message_id)
   
   if (existingIndex !== -1) {
     const updatedMessages = [...messages]
@@ -84,7 +84,7 @@ const createMessageActions = (
 
   updateReactions: (type: MessageStoreType, key: string | number, messageId: number, reactions: UiMessageReaction[]) => {
     const storeKey = getStoreKey(type, key)
-    const existingMessage = get().messages[type][storeKey]?.find(msg => msg.id === messageId)
+    const existingMessage = get().messages[type][storeKey]?.find(msg => msg.message_id === messageId)
     
     if (!existingMessage) return
 
@@ -122,7 +122,7 @@ const createMessageActions = (
   deleteMessage: (type: MessageStoreType, key: string | number, messageId: number) => {
     const storeKey = getStoreKey(type, key)
     const existingMessages = get().messages[type][storeKey] || []
-    const updatedMessages = existingMessages.filter(msg => msg.id !== messageId)
+    const updatedMessages = existingMessages.filter(msg => msg.message_id !== messageId)
 
     if (updatedMessages.length !== existingMessages.length) {
       set(state => ({

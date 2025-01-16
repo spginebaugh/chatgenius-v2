@@ -5,7 +5,7 @@ import { DbMessage, MessageReaction, UserStatus, MessageFile, FileType } from '.
  * Required fields have non-null defaults, optional fields use null for conditional rendering.
  */
 export interface UiProfile {
-  id: string // Required: from user_id if profile missing
+  user_id: string // Required: from user_id if profile missing
   username: string // Required: defaults to 'Unknown'
   profile_picture_url: string | null // Optional: for conditional rendering of avatar
   status: UserStatus // Required: defaults to 'OFFLINE'
@@ -37,7 +37,7 @@ export interface UiMessageReaction {
  * Required fields have non-null defaults, preserves nullability for routing-related fields.
  */
 export interface BaseUiMessage {
-  id: number
+  message_id: number
   message: string // Required: defaults to empty string
   message_type: DbMessage['message_type']
   user_id: string
@@ -76,7 +76,8 @@ export interface MessageProps {
 export interface ChatViewData {
   type: 'channel' | 'dm'
   data: {
-    id: string | number
+    channel_id?: number // For channel type
+    user_id?: string // For dm type
     name?: string // Optional: for display
     slug?: string // Optional: for routing
   }

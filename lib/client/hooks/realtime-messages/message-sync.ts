@@ -14,7 +14,7 @@ function compareArrays<T>(a: T[] | undefined, b: T[] | undefined, compareFn: (x:
 function compareMessages(a: UiMessage, b: UiMessage) {
   // Compare only essential properties that affect UI rendering
   const essentialPropsMatch = 
-    a.id === b.id &&
+    a.message_id === b.message_id &&
     a.message === b.message &&
     a.user_id === b.user_id
 

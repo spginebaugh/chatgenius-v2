@@ -4,33 +4,27 @@ import type { UiMessage } from "@/types/messages-ui"
 export function useThreadMessageState(initialMessages: UiMessage[] = []) {
   const [threadMessages, setThreadMessages] = useState<UiMessage[]>(initialMessages)
 
-  const addMessage = useCallback((formattedMessage: UiMessage) => {
+  const addOrUpdateMessage = useCallback((formattedMessage: UiMessage) => {
     setThreadMessages(prev => {
-      const exists = prev.some(m => m.id === formattedMessage.id)
-      if (exists) {
-        return prev.map(m => m.id === formattedMessage.id ? formattedMessage : m)
-      }
-      return [...prev, formattedMessage].sort((a, b) => 
-        new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime()
-      )
+      const exists = prev.some(m => m.message_id === formattedMessage.message_id)
+      if (!exists) return [...prev, formattedMessage]
+      return prev.map(m => m.message_id === formattedMessage.message_id ? formattedMessage : m)
     })
   }, [])
 
   const removeMessage = useCallback((messageId: number) => {
-    setThreadMessages(prev => prev.filter(msg => msg.id !== messageId))
+    setThreadMessages(prev => prev.filter(msg => msg.message_id !== messageId))
   }, [])
 
-  const updateMessage = useCallback((messageId: number, updatedMessage: UiMessage | ((prev: UiMessage) => UiMessage)) => {
+  const updateMessage = useCallback((messageId: number, formattedMessage: UiMessage) => {
     setThreadMessages(prev => prev.map(msg => 
-      msg.id === messageId 
-        ? (typeof updatedMessage === 'function' ? updatedMessage(msg) : updatedMessage)
-        : msg
+      msg.message_id === messageId ? formattedMessage : msg
     ))
   }, [])
 
   return {
     threadMessages,
-    addMessage,
+    addOrUpdateMessage,
     removeMessage,
     updateMessage,
     setThreadMessages

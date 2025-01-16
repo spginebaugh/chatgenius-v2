@@ -2,69 +2,68 @@
 
 // Imports
 // -----------------------------------------------
-import { useRealtimeMessages } from "@/lib/client/hooks/realtime-messages"
-import { MessageInput } from "./message/message-input"
 import { useThreadMessages } from "./thread/hooks"
-import { 
-  ThreadMessage, 
-  ThreadHeader 
-} from "./thread/components"
+import { MessageInput } from "./message/message-input"
+import { MessageItem } from "./message/message-list/message-item"
 import type { ThreadPanelProps } from "./shared/types"
+import type { UiMessage } from "@/types/messages-ui"
+import { X } from "lucide-react"
 
 // Main Component
 // -----------------------------------------------
 export function ThreadPanel({ 
   selectedMessage, 
   currentUserId,
-  onSendMessage,
+  onSendMessage: _onSendMessage,
   onClose, 
   onEmojiSelect
 }: ThreadPanelProps) {
-  const {
-    threadMessages,
-    handleNewMessage,
-    handleDeleteMessage,
-    handleUpdateMessage,
-    handleUpdateReactions
-  } = useThreadMessages(selectedMessage, currentUserId)
+  const { threadMessages, sendMessage } = useThreadMessages(selectedMessage, currentUserId)
 
-  useRealtimeMessages({
-    parentMessageId: selectedMessage.id,
-    onNewMessage: handleNewMessage,
-    onMessageDelete: handleDeleteMessage,
-    onMessageUpdate: handleUpdateMessage,
-    onReactionUpdate: handleUpdateReactions
-  })
+  const handleSendMessage = async (message: string) => {
+    await sendMessage(message)
+  }
+
+  const handleThreadSelect = () => {} // No-op since we're already in thread view
 
   return (
-    <div className="w-96 border-l border-gray-200 flex flex-col bg-white">
-      <ThreadHeader onClose={onClose} />
-
-      <div className="flex-1 overflow-y-auto">
-        {/* Parent Message */}
-        <div className="p-4 border-b border-gray-200">
-          <ThreadMessage 
-            message={selectedMessage}
-            onEmojiSelect={onEmojiSelect}
-          />
-        </div>
-
-        {/* Thread Messages */}
-        <div className="p-4 space-y-4">
-          {threadMessages.map((message) => (
-            <ThreadMessage
-              key={message.id}
-              message={message}
-              onEmojiSelect={onEmojiSelect}
-            />
-          ))}
+    <div className="w-96 border-l border-gray-200 bg-white flex flex-col">
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold">Thread</h2>
+          <button onClick={onClose}>
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
         </div>
       </div>
 
-      {/* Message Input */}
+      <div className="p-4 border-b border-gray-200">
+        <MessageItem
+          message={selectedMessage}
+          onReactionSelect={onEmojiSelect}
+          onThreadSelect={handleThreadSelect}
+          isThreadMessage
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        <ul className="space-y-4">
+          {threadMessages?.map((message: UiMessage) => (
+            <li key={message.message_id}>
+              <MessageItem
+                message={message}
+                onReactionSelect={onEmojiSelect}
+                onThreadSelect={handleThreadSelect}
+                isThreadMessage
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+
       <div className="p-4 border-t border-gray-200">
-        <MessageInput
-          onSendMessage={(message, files) => onSendMessage(message, files)}
+        <MessageInput 
+          onSendMessage={handleSendMessage}
           placeholder="Reply in thread..."
         />
       </div>

@@ -26,7 +26,7 @@ export async function getDirectMessages(userId: string, otherUserId: string): Pr
   if (!messages.length) return []
 
   // Fetch and attach thread messages
-  const messageIds = messages.map(m => m.id)
+  const messageIds = messages.map(m => m.message_id)
   const threadMessages = await fetchThreadMessages(messageIds)
   const threadMessagesByParent = groupThreadMessagesByParent(threadMessages)
 
@@ -34,7 +34,7 @@ export async function getDirectMessages(userId: string, otherUserId: string): Pr
   const formattedMessages = await Promise.all(
     messages.map(async message => {
       const formattedMessage = await formatMessageForDisplay(message as MessageWithJoins)
-      const threadMessagesForParent = threadMessagesByParent[message.id] || []
+      const threadMessagesForParent = threadMessagesByParent[message.message_id] || []
       formattedMessage.thread_messages = await formatThreadMessages(threadMessagesForParent)
       return formattedMessage
     })
