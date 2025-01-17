@@ -113,6 +113,7 @@ export function MessageInput({
       }),
     ],
     content: '',
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none',
