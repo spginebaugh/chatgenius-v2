@@ -113,7 +113,7 @@ export async function queryDocuments(
     }
 
     // Get relevant chunks with metadata
-    const results = await queryVectors(question, 5) // Get top 5 chunks
+    const results = await queryVectors(question, undefined, 5) // Get top 5 chunks across all namespaces
     
     if (results.length === 0) {
       return {
