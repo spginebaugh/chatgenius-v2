@@ -3,17 +3,18 @@
 import { createStore } from './config'
 import { Channel } from '@/types/database'
 
+type SetState<T> = (
+  partial: T | Partial<T> | ((state: T) => T | Partial<T>),
+  replace?: boolean
+) => void
+
 interface ChannelsState {
   channels: Record<number, Channel>
   activeChannelId: number | null
-  unreadCounts: Record<number, number>
   isLoading: boolean
   error: string | null
-
-  // Actions
   setChannels: (channels: Channel[]) => void
   setActiveChannel: (channelId: number | null) => void
-  updateUnreadCount: (channelId: number, count: number) => void
   addChannel: (channel: Channel) => void
   updateChannel: (channelId: number, updates: Partial<Channel>) => void
   removeChannel: (channelId: number) => void
@@ -22,51 +23,37 @@ interface ChannelsState {
   reset: () => void
 }
 
-const initialState: Pick<ChannelsState, 'channels' | 'activeChannelId' | 'unreadCounts' | 'isLoading' | 'error'> = {
-  channels: {},
-  activeChannelId: null,
-  unreadCounts: {},
+const initialState = {
+  channels: {} as Record<number, Channel>,
+  activeChannelId: null as number | null,
   isLoading: false,
-  error: null,
+  error: null as string | null,
 }
 
-export const useChannelsStore = createStore<ChannelsState>({
+export const useChannelsStore = createStore<ChannelsState>((set: SetState<ChannelsState>) => ({
   ...initialState,
 
-  // Set all channels
-  setChannels: (channels) =>
-    useChannelsStore.setState(state => ({
-      channels: channels.reduce((acc, channel) => {
+  setChannels: (channels: Channel[]) => 
+    set((state: ChannelsState) => ({
+      channels: channels.reduce((acc: Record<number, Channel>, channel: Channel) => {
         acc[channel.channel_id] = channel
         return acc
       }, {} as Record<number, Channel>)
     })),
 
-  // Set active channel
-  setActiveChannel: (channelId) =>
-    useChannelsStore.setState({ activeChannelId: channelId }),
+  setActiveChannel: (channelId: number | null) => 
+    set({ activeChannelId: channelId }),
 
-  // Update unread count
-  updateUnreadCount: (channelId, count) =>
-    useChannelsStore.setState(state => ({
-      unreadCounts: {
-        ...state.unreadCounts,
-        [channelId]: count
-      }
-    })),
-
-  // Add new channel
-  addChannel: (channel) =>
-    useChannelsStore.setState(state => ({
+  addChannel: (channel: Channel) => 
+    set((state: ChannelsState) => ({
       channels: {
         ...state.channels,
         [channel.channel_id]: channel
       }
     })),
 
-  // Update channel
-  updateChannel: (channelId, updates) =>
-    useChannelsStore.setState(state => ({
+  updateChannel: (channelId: number, updates: Partial<Channel>) => 
+    set((state: ChannelsState) => ({
       channels: {
         ...state.channels,
         [channelId]: {
@@ -76,19 +63,13 @@ export const useChannelsStore = createStore<ChannelsState>({
       }
     })),
 
-  // Remove channel
-  removeChannel: (channelId) =>
-    useChannelsStore.setState(state => {
-      const { [channelId]: removed, ...channels } = state.channels
-      return { channels }
+  removeChannel: (channelId: number) => 
+    set((state: ChannelsState) => {
+      const { [channelId]: _, ...rest } = state.channels
+      return { channels: rest }
     }),
 
-  // Error handling
-  setError: (error) => useChannelsStore.setState({ error }),
-
-  // Loading state
-  setLoading: (isLoading) => useChannelsStore.setState({ isLoading }),
-
-  // Reset store
-  reset: () => useChannelsStore.setState(initialState)
-}, 'channels-store', true) // Enable storage for offline support 
+  setError: (error: string | null) => set({ error }),
+  setLoading: (isLoading: boolean) => set({ isLoading }),
+  reset: () => set(initialState)
+}), 'channels-store', true) 

@@ -1,12 +1,13 @@
 import type { UiMessage, UiMessageReaction } from '@/types/messages-ui'
+import type { MessageType } from '@/types/database'
 
-export type MessageStoreType = 'channels' | 'dms' | 'threads'
+export type MessageStoreType = MessageType
 
 export interface MessagesState {
   messages: {
-    channels: Record<string, UiMessage[]>
-    dms: Record<string, UiMessage[]>
-    threads: Record<string, UiMessage[]>
+    channel: Record<string, UiMessage[]>
+    direct: Record<string, UiMessage[]>
+    thread: Record<string, UiMessage[]>
   }
   error: string | null
   isLoading: boolean

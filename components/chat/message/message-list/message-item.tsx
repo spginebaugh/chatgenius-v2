@@ -53,11 +53,31 @@ export function MessageItem({
         username={message.profiles.username}
         status={message.profiles.status}
       />
-      
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900">{message.profiles.username}</span>
-          <MessageTime timestamp={timestamp} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{message.profiles.username}</span>
+            <MessageTime timestamp={timestamp} />
+          </div>
+          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <EmojiButton
+              messageId={message.message_id}
+              onEmojiSelect={onReactionSelect}
+            />
+            {!isThreadMessage && (
+              <button
+                className="text-sm text-gray-500 hover:text-gray-700 bg-white h-8 px-2 rounded border border-gray-200 shadow-sm"
+                onClick={() => onThreadSelect(message.message_id)}
+              >
+                <div className="flex items-center">
+                  <MessageSquare className="h-4 w-4" />
+                  {message.thread_count > 0 && (
+                    <span className="ml-1 text-xs">{message.thread_count}</span>
+                  )}
+                </div>
+              </button>
+            )}
+          </div>
         </div>
 
         <div 
@@ -69,7 +89,7 @@ export function MessageItem({
           <MessageFiles files={message.files} />
         )}
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 mt-2">
           {message.reactions.map((reaction) => (
             <button
               key={reaction.emoji}
@@ -82,21 +102,6 @@ export function MessageItem({
               {reaction.emoji} {reaction.count}
             </button>
           ))}
-          <EmojiButton
-            messageId={message.message_id}
-            onEmojiSelect={onReactionSelect}
-          />
-          {!isThreadMessage && (
-            <button
-              className="text-gray-500 hover:text-gray-700"
-              onClick={() => onThreadSelect(message.message_id)}
-            >
-              <MessageSquare className="w-4 h-4" />
-              {message.thread_count > 0 && (
-                <span className="ml-1">{message.thread_count}</span>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </div>

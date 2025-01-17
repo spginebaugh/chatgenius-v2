@@ -13,7 +13,7 @@ function getFileNameFromUrl(url: string): string {
   }
 }
 
-export async function convertToUiMessage(message: DbMessage, currentUserId: string): Promise<UiMessage> {
+export async function convertToUiMessage(message: DbMessage): Promise<UiMessage> {
   // Fetch full message data with all relations
   const { data: messageData } = await supabase
     .from('messages')

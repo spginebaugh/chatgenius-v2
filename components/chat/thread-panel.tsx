@@ -1,7 +1,6 @@
 "use client"
 
-// Imports
-// -----------------------------------------------
+import { memo, useCallback } from "react"
 import { useThreadMessages } from "./thread/hooks"
 import { MessageInput } from "./message/message-input"
 import { MessageItem } from "./message/message-list/message-item"
@@ -9,24 +8,37 @@ import type { ThreadPanelProps } from "./shared/types"
 import type { UiMessage } from "@/types/messages-ui"
 import { X } from "lucide-react"
 
-// Main Component
-// -----------------------------------------------
-export function ThreadPanel({ 
+const ThreadMessage = memo(function ThreadMessage({ 
+  message, 
+  onEmojiSelect 
+}: { 
+  message: UiMessage
+  onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
+}) {
+  const handleThreadSelect = useCallback(() => {}, []) // No-op since we're already in thread view
+
+  return (
+    <MessageItem
+      message={message}
+      onReactionSelect={onEmojiSelect}
+      onThreadSelect={handleThreadSelect}
+      isThreadMessage
+    />
+  )
+})
+
+export const ThreadPanel = memo(function ThreadPanel({ 
   selectedMessage, 
   currentUserId,
   onSendMessage: _onSendMessage,
   onClose, 
   onEmojiSelect
 }: ThreadPanelProps) {
-  const { threadMessages, sendMessage } = useThreadMessages(selectedMessage, currentUserId)
+  const { messages: threadMessages, sendMessage } = useThreadMessages(selectedMessage)
 
-  console.log('Thread panel rendering with messages:', threadMessages)
-
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     await sendMessage(message)
-  }
-
-  const handleThreadSelect = () => {} // No-op since we're already in thread view
+  }, [sendMessage])
 
   return (
     <div className="w-96 border-l border-gray-200 bg-white flex flex-col">
@@ -40,29 +52,22 @@ export function ThreadPanel({
       </div>
 
       <div className="p-4 border-b border-gray-200">
-        <MessageItem
+        <ThreadMessage
           message={selectedMessage}
-          onReactionSelect={onEmojiSelect}
-          onThreadSelect={handleThreadSelect}
-          isThreadMessage
+          onEmojiSelect={onEmojiSelect}
         />
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-4">
-          {threadMessages?.map((message: UiMessage) => {
-            console.log('Rendering thread message:', message)
-            return (
-              <li key={message.message_id}>
-                <MessageItem
-                  message={message}
-                  onReactionSelect={onEmojiSelect}
-                  onThreadSelect={handleThreadSelect}
-                  isThreadMessage
-                />
-              </li>
-            )
-          })}
+          {threadMessages?.map((message: UiMessage) => (
+            <li key={message.message_id}>
+              <ThreadMessage
+                message={message}
+                onEmojiSelect={onEmojiSelect}
+              />
+            </li>
+          ))}
         </ul>
       </div>
 
@@ -74,4 +79,4 @@ export function ThreadPanel({
       </div>
     </div>
   )
-} 
+}) 

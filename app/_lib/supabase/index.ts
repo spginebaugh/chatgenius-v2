@@ -8,7 +8,4 @@ export * from './error-handlers'
 export * from './query-builders'
 
 // Re-export core operations
-export * from './core-operations'
-
-// Re-export subscription handling
-export * from './subscriptions' 
+export * from './core-operations' 

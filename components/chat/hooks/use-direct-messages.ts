@@ -1,64 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { DbMessage, MessageReaction, UserStatus } from "@/types/database"
-import { UiMessage } from "@/types/messages-ui"
-import { RealtimeChannel } from "@supabase/supabase-js"
-import { convertToUiMessage } from "@/lib/client/hooks/realtime-messages/message-converter"
+import type { UiMessage, UiFileAttachment } from "@/types/messages-ui"
+import type { DbMessage, MessageFile } from "@/types/database"
+import { handleMessage } from "@/app/actions/messages/handle-message"
 
 export function useDirectMessages(currentUserId: string, otherUserId: string) {
   const [messages, setMessages] = useState<UiMessage[]>([])
-  const supabase = createClient()
-  const subscriptionRef = useRef<RealtimeChannel | null>(null)
-  const lastEventRef = useRef<{ type: string; message_id: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const supabase = useMemo(() => createClient(), [])
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const isMounted = useRef(true)
 
-  const addOrUpdateMessage = useCallback((message: UiMessage) => {
-    setMessages(prev => {
-      const index = prev.findIndex(m => m.message_id === message.message_id)
-      if (index === -1) {
-        return [...prev, message]
-      }
-      const newMessages = [...prev]
-      newMessages[index] = message
-      return newMessages
-    })
-  }, [])
-
-  const removeMessage = useCallback((messageId: number) => {
-    setMessages(prev => prev.filter(m => m.message_id !== messageId))
-  }, [])
-
-  const handleMessageInsert = useCallback(async (message: DbMessage) => {
-    const eventKey = `INSERT_${message.message_id}`
-    if (lastEventRef.current?.type === eventKey) return
-    lastEventRef.current = { type: eventKey, message_id: message.message_id }
-
-    const formattedMessage = await convertToUiMessage(message, currentUserId)
-    if (formattedMessage) addOrUpdateMessage(formattedMessage)
-  }, [addOrUpdateMessage, currentUserId])
-
-  const handleMessageDelete = useCallback((message: DbMessage) => {
-    const eventKey = `DELETE_${message.message_id}`
-    if (lastEventRef.current?.type === eventKey) return
-    lastEventRef.current = { type: eventKey, message_id: message.message_id }
-
-    removeMessage(message.message_id)
-  }, [removeMessage])
-
-  const handleMessageUpdate = useCallback(async (message: DbMessage) => {
-    const eventKey = `UPDATE_${message.message_id}`
-    if (lastEventRef.current?.type === eventKey) return
-    lastEventRef.current = { type: eventKey, message_id: message.message_id }
-
-    const formattedMessage = await convertToUiMessage(message, currentUserId)
-    if (formattedMessage) addOrUpdateMessage(formattedMessage)
-  }, [addOrUpdateMessage, currentUserId])
-
-  // Fetch initial messages
-  useEffect(() => {
-    let isMounted = true
-
-    const fetchInitialMessages = async () => {
-      const { data: messages } = await supabase
+  const fetchMessages = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const { data, error } = await supabase
         .from('messages')
         .select(`
           *,
@@ -69,97 +26,186 @@ export function useDirectMessages(currentUserId: string, otherUserId: string) {
             status
           ),
           files:message_files(*),
-          reactions:message_reactions(*)
+          reactions:message_reactions(*),
+          mentions:message_mentions(*)
         `)
         .eq('message_type', 'direct')
         .or(`and(user_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`)
         .order('inserted_at', { ascending: true })
 
-      if (!isMounted || !messages) return
+      if (error) throw error
 
-      const formattedMessages = await Promise.all(messages.map(msg => convertToUiMessage(msg, currentUserId)))
-      if (isMounted) {
-        setMessages(formattedMessages)
+      if (isMounted.current) {
+        const uiMessages = data.map(msg => ({
+          ...msg,
+          profiles: msg.profiles || {
+            user_id: msg.user_id,
+            username: 'Unknown',
+            profile_picture_url: null,
+            status: 'OFFLINE'
+          },
+          reactions: msg.reactions || [],
+          files: (msg.files || []).map((file: MessageFile) => ({
+            url: file.file_url,
+            type: file.file_type,
+            name: file.file_url.split('/').pop() || 'file',
+            vector_status: file.vector_status
+          })),
+          thread_messages: []
+        }))
+        setMessages(uiMessages)
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch messages')
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false)
       }
     }
+  }, [currentUserId, otherUserId, supabase])
 
-    fetchInitialMessages()
-    return () => { isMounted = false }
-  }, [currentUserId, otherUserId])
-
-  // Set up realtime subscription
   useEffect(() => {
+    isMounted.current = true
+    
     // Clean up previous subscription if it exists
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe()
-      subscriptionRef.current = null
+    if (channelRef.current) {
+      channelRef.current.unsubscribe()
     }
+
+    // Fetch initial messages
+    fetchMessages()
 
     // Set up new subscription
-    subscriptionRef.current = supabase
-      .channel(`direct-messages-${currentUserId}-${otherUserId}`)
-      .on('postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `message_type=eq.direct&or=(and(user_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${currentUserId}))`
-        },
-        payload => {
-          if (payload.new && 'message_id' in payload.new) {
-            handleMessageInsert(payload.new as DbMessage)
+    const channel = supabase
+      .channel(`direct-${currentUserId}-${otherUserId}`)
+      .on<DbMessage>('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `message_type=eq.direct`
+      }, async (payload) => {
+        if (!isMounted.current || !payload.new) return
+        
+        // Only process messages that are part of this conversation
+        const msg = payload.new
+        const isRelevant = (
+          (msg.user_id === currentUserId && msg.receiver_id === otherUserId) ||
+          (msg.user_id === otherUserId && msg.receiver_id === currentUserId)
+        )
+        if (!isRelevant) return
+
+        const { data } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            profiles:users!messages_user_id_fkey(
+              user_id,
+              username,
+              profile_picture_url,
+              status
+            ),
+            files:message_files(*),
+            reactions:message_reactions(*),
+            mentions:message_mentions(*)
+          `)
+          .eq('message_id', payload.new.message_id)
+          .single()
+
+        if (data && isMounted.current) {
+          const newMessage = {
+            ...data,
+            profiles: data.profiles || {
+              user_id: data.user_id,
+              username: 'Unknown',
+              profile_picture_url: null,
+              status: 'OFFLINE'
+            },
+            reactions: data.reactions || [],
+            files: (data.files || []).map((file: MessageFile) => ({
+              url: file.file_url,
+              type: file.file_type,
+              name: file.file_url.split('/').pop() || 'file',
+              vector_status: file.vector_status
+            })),
+            thread_messages: []
           }
+          setMessages(prev => [...prev, newMessage])
         }
-      )
-      .on('postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'messages',
-          filter: `message_type=eq.direct&or=(and(user_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${currentUserId}))`
-        },
-        payload => {
-          if (payload.old && 'message_id' in payload.old) {
-            handleMessageDelete(payload.old as DbMessage)
-          }
-        }
-      )
-      .on('postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `message_type=eq.direct&or=(and(user_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},receiver_id.eq.${currentUserId}))`
-        },
-        payload => {
-          if (payload.new && 'message_id' in payload.new) {
-            handleMessageUpdate(payload.new as DbMessage)
-          }
-        }
-      )
+      })
       .subscribe()
 
-    // Cleanup function
+    channelRef.current = channel
+
     return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe()
-        subscriptionRef.current = null
+      isMounted.current = false
+      if (channelRef.current) {
+        channelRef.current.unsubscribe()
+        channelRef.current = null
       }
     }
-  }, [currentUserId, otherUserId, handleMessageInsert, handleMessageDelete, handleMessageUpdate])
+  }, [currentUserId, otherUserId, supabase, fetchMessages])
 
-  const sendMessage = useCallback(async (message: string) => {
-    await supabase.from('messages').insert({
-      message,
-      message_type: 'direct',
-      user_id: currentUserId,
-      receiver_id: otherUserId,
-      inserted_at: new Date().toISOString()
-    })
-  }, [currentUserId, otherUserId])
+  const sendMessage = useCallback(async (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => {
+    try {
+      const result = await handleMessage({
+        message,
+        receiverId: otherUserId,
+        files,
+        isRagQuery,
+        isImageGeneration
+      })
 
-  return {
+      if (isMounted.current) {
+        const { data } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            profiles:users!messages_user_id_fkey(
+              user_id,
+              username,
+              profile_picture_url,
+              status
+            ),
+            files:message_files(*),
+            reactions:message_reactions(*),
+            mentions:message_mentions(*)
+          `)
+          .eq('message_id', result.message_id)
+          .single()
+
+        if (data) {
+          const newMessage = {
+            ...data,
+            profiles: data.profiles || {
+              user_id: data.user_id,
+              username: 'Unknown',
+              profile_picture_url: null,
+              status: 'OFFLINE'
+            },
+            reactions: data.reactions || [],
+            files: (data.files || []).map((file: MessageFile) => ({
+              url: file.file_url,
+              type: file.file_type,
+              name: file.file_url.split('/').pop() || 'file',
+              vector_status: file.vector_status
+            })),
+            thread_messages: []
+          }
+          setMessages(prev => [...prev, newMessage])
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send message')
+      throw err
+    }
+  }, [otherUserId, supabase])
+
+  return useMemo(() => ({
     messages,
+    isLoading,
+    error,
     sendMessage
-  }
+  }), [messages, isLoading, error, sendMessage])
 } 

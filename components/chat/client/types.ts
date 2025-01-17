@@ -1,4 +1,4 @@
-import type { User, MessageReaction, DbMessage, UserStatus } from '@/types/database'
+import type { User, MessageReaction, DbMessage, UserStatus, MessageType } from '@/types/database'
 import type { UiProfile, UiMessage } from '@/types/messages-ui'
 import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
 
@@ -12,7 +12,7 @@ export interface ChatClientFetchProps {
 }
 
 export interface QueryConfig {
-  messageType: 'channels' | 'dms' | 'threads'
+  messageType: MessageType
   storeKey: string | number
   query: PostgrestFilterBuilder<any, any, any>
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { memo } from "react"
+import { memo, useMemo } from "react"
 import type { User, Channel } from "@/types/database"
 import type { UiMessage } from "@/types/messages-ui"
 import type { ChatViewData } from "./shared/types"
@@ -11,6 +11,7 @@ import { getViewKeyAndType } from "./utils/view-helpers"
 import { useChannelMessages } from "./hooks/use-channel-messages"
 import { useDirectMessages } from "./hooks/use-direct-messages"
 import { UsersProvider } from "./providers/users-provider"
+import { addEmojiReaction } from "@/app/actions/messages"
 
 interface ChatClientProps {
   initialView: ChatViewData
@@ -20,21 +21,32 @@ interface ChatClientProps {
   initialMessages: UiMessage[]
 }
 
-function ChatContent({ initialView, channels, initialMessages }: { 
+const ChatContent = memo(function ChatContent({ 
+  initialView, 
+  channels, 
+  initialMessages 
+}: { 
   initialView: ChatViewData
   channels: Channel[]
   initialMessages: UiMessage[]
 }) {
   const router = useRouter()
   const { users, currentUser, handleLogout } = useUsers()
-  const { channelId, receiverId } = getViewKeyAndType(initialView)
+  const { channelId, receiverId } = useMemo(() => getViewKeyAndType(initialView), [initialView])
+
+  // If no current user, we can't load messages
+  if (!currentUser) {
+    return <div>Loading user data...</div>
+  }
 
   // Use the appropriate messages hook based on the view type
   const channelMessages = channelId ? useChannelMessages(channelId, currentUser.user_id) : null
   const directMessages = receiverId ? useDirectMessages(currentUser.user_id, receiverId) : null
 
   // Get the active messages and send function based on view type
-  const { messages, sendMessage } = (channelId ? channelMessages : directMessages) ?? { messages: [], sendMessage: async () => {} }
+  const activeMessages = channelId ? channelMessages : directMessages
+  const messages = activeMessages?.messages || []
+  const sendMessage = activeMessages?.sendMessage || (async () => {})
 
   // Handle logout with router redirect
   const handleLogoutWithRedirect = async () => {
@@ -42,10 +54,13 @@ function ChatContent({ initialView, channels, initialMessages }: {
     router.push("/sign-in")
   }
 
-  // Temporary emoji handler that returns a Promise
-  const handleEmojiSelect = async (_messageId: number, _emoji: string) => {
-    // TODO: Implement emoji handling
-    return Promise.resolve()
+  // Handle emoji reactions
+  const handleEmojiSelect = async (messageId: number, emoji: string) => {
+    try {
+      await addEmojiReaction({ messageId, emoji })
+    } catch (error) {
+      console.error('Failed to add emoji reaction:', error)
+    }
   }
 
   return (
@@ -61,7 +76,7 @@ function ChatContent({ initialView, channels, initialMessages }: {
       />
     </div>
   )
-}
+})
 
 const ChatClientComponent = memo(function ChatClientComponent({
   initialView,

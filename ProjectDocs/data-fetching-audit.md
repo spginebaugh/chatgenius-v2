@@ -22,18 +22,12 @@
 
 ### Client-Side Data Fetching
 
-1. **Real-time Messages** (`hooks/use-realtime-messages.ts`)
-   - Uses Supabase subscriptions for real-time updates
-   - Fetches message details on new messages
-   - Must be client-side due to WebSocket requirements
-   - Complex state management for different message types
+1. **Message Fetching** (`hooks/use-message-fetch.ts`)
+   - Handles fetching messages for channels, threads, and DMs
+   - Manages loading and error states
+   - Refreshes data on relevant prop changes
 
-2. **Real-time Users** (`hooks/use-realtime-users.ts`)
-   - Tracks user online status
-   - Uses Supabase subscriptions
-   - Must be client-side for real-time updates
-
-3. **Online Status** (`hooks/use-online-status.ts`)
+2. **User Status** (`hooks/use-online-status.ts`)
    - Updates user online status
    - Requires browser APIs (visibility, beforeunload)
    - Must be client-side due to browser API dependencies
@@ -42,17 +36,17 @@
 
 1. **Chat Implementation** (`components/chat/chat-client.tsx`)
    - Initial data from server (SSR)
-   - Real-time updates on client
+   - Client-side updates through polling
    - State management for messages and reactions
    - Good candidate for Zustand store integration
 
 ## Categorization
 
 ### Must Be Client-Side
-- Real-time message subscriptions
 - User online status tracking
 - Browser API dependent features
 - Interactive UI state
+- Message polling and updates
 
 ### Can Be Server-Side
 - Initial data loading
@@ -61,14 +55,14 @@
 - Static content
 
 ### Hybrid (SSR + Client Updates)
-- Chat messages (initial load + real-time)
+- Chat messages (initial load + polling)
 - User list (initial load + status updates)
 - Channel list (initial load + updates)
 
 ## Optimization Opportunities
 
 1. **State Management**
-   - Move real-time message state to Zustand store
+   - Centralize message state in Zustand store
    - Centralize user status management
    - Create dedicated stores for channels and messages
 
@@ -76,11 +70,13 @@
    - Implement request deduplication
    - Add caching layer for frequently accessed data
    - Use optimistic updates for better UX
+   - Implement efficient polling strategies
 
 3. **Performance**
    - Implement proper error boundaries
    - Add loading states
    - Use suspense boundaries for data loading
+   - Optimize polling intervals
 
 ## Technical Debt
 
@@ -106,5 +102,6 @@
    - Centralized query functions
    - Error handling utilities
    - Loading state management
+   - Efficient polling mechanisms
 
 3. Add proper error boundaries and suspense boundaries for better UX 

@@ -7,14 +7,22 @@ import type { MessagesState, MessageStoreType } from './types'
 import { getStoreKey, mergeMessages, formatReactions, formatMessageForStore } from './utils'
 
 // Constants
-const initialState = {
+const initialState: MessagesState = {
   messages: {
-    channels: {},
-    dms: {},
-    threads: {}
+    channel: {},
+    direct: {},
+    thread: {}
   },
   error: null,
-  isLoading: false
+  isLoading: false,
+  
+  setMessages: () => {},
+  updateReactions: () => {},
+  addMessage: () => {},
+  addThreadMessage: () => {},
+  deleteMessage: () => {},
+  clearError: () => {},
+  reset: () => {}
 }
 
 // Message Update Helpers
@@ -110,12 +118,12 @@ const createMessageActions = (
   },
 
   addThreadMessage: (parentId: number, message: UiMessage) => {
-    const storeKey = getStoreKey('threads', parentId)
-    const existingMessages = get().messages.threads[storeKey] || []
+    const storeKey = getStoreKey('thread', parentId)
+    const existingMessages = get().messages.thread[storeKey] || []
     const updatedMessages = addMessageToList(existingMessages, message)
 
     set(state => ({
-      messages: updateMessagesState(state.messages, 'threads', storeKey, updatedMessages)
+      messages: updateMessagesState(state.messages, 'thread', storeKey, updatedMessages)
     }))
   },
 

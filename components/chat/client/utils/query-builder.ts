@@ -1,57 +1,45 @@
+import type { MessageType } from '@/types/database'
+import type { QueryConfig } from '../types'
 import { createClient } from '@/lib/supabase/client'
-import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
-import type { ChatClientFetchProps, QueryConfig } from '../types'
 
 const supabase = createClient()
 
-export function buildMessageQuery(supabase: ReturnType<typeof createClient>) {
-  return supabase
-    .from('messages')
-    .select(`
-      *,
-      profiles:users!messages_user_id_fkey(
-        user_id,
-        username,
-        profile_picture_url,
-        status
-      ),
-      reactions:message_reactions(*),
-      files:message_files(*)
-    `)
-}
-
-export function configureQueryParams({
+export function buildMessageQuery({
   currentUser,
   currentChannelId,
   currentDmUserId,
-  parentMessageId,
-  skipInitialFetch = false
-}: ChatClientFetchProps): QueryConfig | null {
-  if (skipInitialFetch && !parentMessageId && (currentChannelId || currentDmUserId)) {
-    return null
-  }
-
-  let messageType: 'channels' | 'dms' | 'threads' = 'channels'
-  let storeKey: string | number = ''
-  let query = buildMessageQuery(supabase) as PostgrestFilterBuilder<any, any, any>
+  parentMessageId
+}: {
+  currentUser: { user_id: string }
+  currentChannelId?: number
+  currentDmUserId?: string
+  parentMessageId?: number
+}): QueryConfig {
+  let messageType: MessageType = 'channel'
+  let storeKey: string | number
+  let query = supabase.from('messages').select('*')
 
   if (parentMessageId) {
-    query = query.eq('parent_message_id', parentMessageId)
-    messageType = 'threads'
+    messageType = 'thread'
     storeKey = parentMessageId
-  } else if (currentChannelId) {
-    query = query.eq('channel_id', currentChannelId)
-    messageType = 'channels'
-    storeKey = currentChannelId
+    query = query.eq('parent_message_id', parentMessageId)
   } else if (currentDmUserId) {
-    query = query
-      .eq('message_type', 'direct')
-      .or(`and(user_id.eq.${currentUser.user_id},receiver_id.eq.${currentDmUserId}),and(user_id.eq.${currentDmUserId},receiver_id.eq.${currentUser.user_id})`)
-    messageType = 'dms'
+    messageType = 'direct'
     storeKey = currentDmUserId
+    query = query.eq('message_type', 'direct')
+      .or(`and(user_id.eq.${currentUser.user_id},receiver_id.eq.${currentDmUserId}),and(user_id.eq.${currentDmUserId},receiver_id.eq.${currentUser.user_id})`)
+  } else if (currentChannelId) {
+    messageType = 'channel'
+    storeKey = currentChannelId
+    query = query.eq('channel_id', currentChannelId)
+      .eq('message_type', 'channel')
   } else {
-    return null
+    throw new Error('No valid message context provided')
   }
 
-  return { messageType, storeKey, query }
+  return {
+    messageType,
+    storeKey,
+    query
+  }
 } 

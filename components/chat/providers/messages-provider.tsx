@@ -1,9 +1,9 @@
 "use client"
 
-import { createContext, useContext, useCallback, ReactNode } from "react"
+import { createContext, useContext, ReactNode } from "react"
 import type { User } from "@/types/database"
 import type { UiMessage, UiFileAttachment } from "@/types/messages-ui"
-import { useChatMessages } from "../hooks/use-chat-messages"
+import { useMessageFetch } from "../client/hooks/use-message-fetch"
 import { ChatViewData } from "../shared"
 import { getViewKeyAndType } from "../utils/view-helpers"
 
@@ -27,14 +27,18 @@ export function MessagesProvider({ children, initialView, users, currentUser }: 
   const { messageType, key, channelId, receiverId } = getViewKeyAndType(initialView)
 
   // Setup message management
-  const { messages, handleSendMessage, handleEmojiSelect } = useChatMessages({
-    messageType,
-    key,
-    users,
-    currentUser,
+  const { messages } = useMessageFetch({
     channelId,
     receiverId
   })
+
+  const handleSendMessage = async (message: string, files?: UiFileAttachment[]) => {
+    // TODO: Implement send message
+  }
+
+  const handleEmojiSelect = async (messageId: number, emoji: string) => {
+    // TODO: Implement emoji select
+  }
 
   const value = {
     messages,

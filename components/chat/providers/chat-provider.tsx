@@ -1,44 +1,27 @@
 "use client"
 
 import { ReactNode } from "react"
-import type { User, Channel } from "@/types/database"
-import type { UiMessage } from "@/types/messages-ui"
-import { ChatViewData } from "../shared"
 import { MessagesProvider } from "./messages-provider"
 import { UsersProvider } from "./users-provider"
-import { RealtimeProvider } from "./realtime-provider"
+import { ChannelsProvider } from "./channels-provider"
+import type { User } from "@/types/database"
+import type { ChatViewData } from "../shared"
 
 interface ChatProviderProps {
   children: ReactNode
-  initialView: ChatViewData
+  initialUsers: User[]
   currentUser: User
-  channels: Channel[]
-  users: User[]
-  initialMessages: UiMessage[]
+  initialView: ChatViewData
 }
 
-export function ChatProvider({ 
-  children,
-  initialView,
-  currentUser: initialCurrentUser,
-  channels,
-  users: initialUsers,
-  initialMessages
-}: ChatProviderProps) {
+export function ChatProvider({ children, initialUsers, currentUser, initialView }: ChatProviderProps) {
   return (
-    <RealtimeProvider>
-      <UsersProvider
-        initialUsers={initialUsers}
-        initialCurrentUser={initialCurrentUser}
-      >
-        <MessagesProvider
-          initialView={initialView}
-          users={initialUsers}
-          currentUser={initialCurrentUser}
-        >
+    <ChannelsProvider>
+      <UsersProvider initialUsers={initialUsers} initialCurrentUser={currentUser}>
+        <MessagesProvider initialView={initialView} users={initialUsers} currentUser={currentUser}>
           {children}
         </MessagesProvider>
       </UsersProvider>
-    </RealtimeProvider>
+    </ChannelsProvider>
   )
 } 

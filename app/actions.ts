@@ -66,20 +66,8 @@ export const signInAction = async (formData: FormData) => {
         .from('users')
         .insert({
           user_id: data.user.id,
-          username: email.split('@')[0],
-          status: 'ONLINE',
-          last_active_at: new Date().toISOString()
+          username: email.split('@')[0]
         });
-    } else {
-      // Update existing user's status
-      await updateRecord<User>({
-        table: 'users',
-        data: { 
-          status: 'ONLINE',
-          last_active_at: new Date().toISOString()
-        },
-        match: { user_id: data.user.id }
-      });
     }
 
     // Get the first channel or default to channel 1
@@ -99,8 +87,8 @@ export const signInAction = async (formData: FormData) => {
     const channelId = channels?.[0]?.channel_id || 1;
     return redirect(`/channel/${channelId}`);
   } catch (error) {
-    console.error('[SignInAction] Error updating user status:', error);
-    // Continue with redirect even if status update fails
+    console.error('[SignInAction] Error updating user:', error);
+    // Continue with redirect even if update fails
     return redirect(`/channel/1`);
   }
 };
@@ -180,30 +168,6 @@ export const signOutAction = async () => {
   const supabase = await createServerClient();
   
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Update user status to OFFLINE
-      await updateRecord<User>({
-        table: 'users',
-        data: { 
-          status: 'OFFLINE',
-          last_active_at: new Date().toISOString()
-        },
-        match: { user_id: user.id },
-        options: {
-          errorMap: {
-            NOT_FOUND: {
-              message: 'User profile not found',
-              status: 404
-            }
-          }
-        }
-      });
-
-      // Wait a moment for the status update to propagate
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
     await supabase.auth.signOut();
     return redirect("/sign-in");
   } catch (error) {
@@ -216,30 +180,6 @@ export async function logout() {
   const supabase = await createServerClient();
   
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Update user status to OFFLINE
-      await updateRecord<User>({
-        table: 'users',
-        data: { 
-          status: 'OFFLINE',
-          last_active_at: new Date().toISOString()
-        },
-        match: { user_id: user.id },
-        options: {
-          errorMap: {
-            NOT_FOUND: {
-              message: 'User profile not found',
-              status: 404
-            }
-          }
-        }
-      });
-
-      // Wait a moment for the status update to propagate
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
     await supabase.auth.signOut();
     revalidatePath('/');
     return { success: true };
