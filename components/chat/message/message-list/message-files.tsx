@@ -25,7 +25,7 @@ export function MessageFiles({ files }: MessageFilesProps) {
               <img 
                 src={file.url} 
                 alt={file.name}
-                className="h-24 w-24 object-cover rounded"
+                className="h-64 w-64 object-cover rounded"
               />
             </a>
           ) : (

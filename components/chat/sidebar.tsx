@@ -38,8 +38,8 @@ function ChannelList({ channels, currentView }: ChannelListProps) {
             <Link
               href={`/channel/${channel.channel_id}`}
               className={cn(
-                'block px-2 py-1 hover:bg-gray-100',
-                (currentView.data as Channel).channel_id === channel.channel_id && 'bg-gray-100'
+                'block px-2 py-1 hover:bg-[#A64A00]',
+                (currentView.data as Channel).channel_id === channel.channel_id && 'bg-[#A64A00]'
               )}
             >
               # {channel.slug}
@@ -61,16 +61,18 @@ function DirectMessageList({ users, currentView }: DirectMessageListProps) {
             <Link
               href={`/dm/${user.user_id}`}
               className={cn(
-                'block px-2 py-1 hover:bg-gray-100',
-                (currentView.data as User).user_id === user.user_id && 'bg-gray-100'
+                'block px-2 py-1 hover:bg-[#A64A00]',
+                (currentView.data as User).user_id === user.user_id && 'bg-[#A64A00]'
               )}
             >
-              <UserAvatar 
-                username={user.username}
-                status={user.status}
-                size="sm"
-              />
-              <span className="ml-2">{user.username}</span>
+              <div className="flex items-center min-w-0">
+                <UserAvatar 
+                  username={user.username}
+                  status={user.status}
+                  size="sm"
+                />
+                <span className="ml-2 truncate text-white">{user.username}</span>
+              </div>
             </Link>
           </li>
         ))}
@@ -83,7 +85,7 @@ function DirectMessageList({ users, currentView }: DirectMessageListProps) {
 // -----------------------------------------------
 export function Sidebar({ channels, storeUsers, currentView }: SidebarProps) {
   return (
-    <div className="w-64 bg-[#333F48] flex flex-col">
+    <div className="w-64 bg-[#BF5700] flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <ChannelList channels={channels} currentView={currentView} />
         <DirectMessageList users={storeUsers} currentView={currentView} />

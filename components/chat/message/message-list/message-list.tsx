@@ -19,16 +19,18 @@ export function MessageList({
 }: MessageListProps) {
   return (
     <div className="h-full">
-      {messages.map((message) => (
-        <li key={message.message_id}>
-          <MessageItem
-            message={message}
-            onReactionSelect={onReactionSelect}
-            onThreadSelect={onThreadSelect}
-            isThreadMessage={isThreadView}
-          />
-        </li>
-      ))}
+      <ul className="list-none">
+        {messages.map((message) => (
+          <li key={message.message_id}>
+            <MessageItem
+              message={message}
+              onReactionSelect={onReactionSelect}
+              onThreadSelect={onThreadSelect}
+              isThreadMessage={isThreadView}
+            />
+          </li>
+        ))}
+      </ul>
     </div>
   )
 } 

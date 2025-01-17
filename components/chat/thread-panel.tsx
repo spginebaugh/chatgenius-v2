@@ -41,12 +41,12 @@ export const ThreadPanel = memo(function ThreadPanel({
   }, [sendMessage])
 
   return (
-    <div className="w-96 border-l border-gray-200 bg-white flex flex-col">
-      <div className="p-4 border-b border-gray-200">
+    <div className="w-[450px] border-l border-gray-200 bg-white flex flex-col">
+      <div className="p-4 border-b border-gray-200 bg-[#333F48]">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Thread</h2>
+          <h2 className="text-lg font-semibold text-white">Thread</h2>
           <button onClick={onClose}>
-            <X className="h-5 w-5 text-gray-500" />
+            <X className="h-5 w-5 text-white hover:text-gray-300" />
           </button>
         </div>
       </div>
