@@ -12,6 +12,7 @@ interface UseMessageInputReturn {
   linkUrl: string
   isLinkPopoverOpen: boolean
   isRagMode: boolean
+  isImageGenerationMode: boolean
   handleChange: (evt: ContentEditableEvent) => void
   handlePaste: (e: React.ClipboardEvent) => void
   handleKeyDown: (e: React.KeyboardEvent) => void
@@ -19,6 +20,7 @@ interface UseMessageInputReturn {
   setLinkUrl: (url: string) => void
   setIsLinkPopoverOpen: (isOpen: boolean) => void
   setIsRagMode: (isRagMode: boolean) => void
+  setIsImageGenerationMode: (isImageGenerationMode: boolean) => void
 }
 
 export function useMessageInput({ contentEditableRef }: UseMessageInputProps): UseMessageInputReturn {
@@ -26,6 +28,7 @@ export function useMessageInput({ contentEditableRef }: UseMessageInputProps): U
   const [linkUrl, setLinkUrl] = useState("")
   const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false)
   const [isRagMode, setIsRagMode] = useState(false)
+  const [isImageGenerationMode, setIsImageGenerationMode] = useState(false)
 
   const execCommand = useCallback((command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value)
@@ -63,12 +66,14 @@ export function useMessageInput({ contentEditableRef }: UseMessageInputProps): U
     linkUrl,
     isLinkPopoverOpen,
     isRagMode,
+    isImageGenerationMode,
     handleChange,
     handlePaste,
     handleKeyDown,
     execCommand,
     setLinkUrl,
     setIsLinkPopoverOpen,
-    setIsRagMode
+    setIsRagMode,
+    setIsImageGenerationMode
   }
 } 

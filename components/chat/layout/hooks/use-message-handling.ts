@@ -8,13 +8,15 @@ export function useMessageHandling() {
     currentView: ChatViewData,
     files?: UiFileAttachment[], 
     isRagQuery?: boolean,
-    parentMessageId?: number
+    parentMessageId?: number,
+    isImageGeneration?: boolean
   ) => {
     try {
       await handleMessage({
         message,
         files,
         isRagQuery,
+        isImageGeneration,
         channelId: currentView.type === 'channel' ? (currentView.data as Channel).channel_id : undefined,
         receiverId: currentView.type === 'dm' ? (currentView.data as User).user_id : undefined,
         parentMessageId

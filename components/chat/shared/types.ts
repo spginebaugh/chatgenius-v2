@@ -13,7 +13,7 @@ export interface ChatLayoutProps {
   users: User[]
   channels: Channel[]
   messages: UiMessage[]
-  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => Promise<void>
   onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
   initialView: ChatViewData
   isLoading?: boolean
@@ -22,7 +22,7 @@ export interface ChatLayoutProps {
 export interface ThreadPanelProps {
   selectedMessage: UiMessage
   currentUserId: string
-  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => Promise<void>
   onClose: () => void
   onEmojiSelect: (messageId: number, emoji: string) => Promise<void>
 }
@@ -41,7 +41,7 @@ export interface ProfileSettingsPanelProps {
 // Shared sub-component props
 export interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => Promise<void>
   isLoading?: boolean
 }
 

@@ -6,6 +6,7 @@ import { createMessageData } from './utils/create-message'
 import { insertMessage, formatMessageResponse, refreshMessageWithFiles } from './utils/db-operations'
 import { processFileAttachment } from './utils/file-handler'
 import { handleRagQuery } from './utils/rag-handler'
+import { generateAndStoreImage } from './utils/image-handler'
 
 export async function handleMessage({ 
   message, 
@@ -13,7 +14,8 @@ export async function handleMessage({
   channelId, 
   receiverId, 
   parentMessageId,
-  isRagQuery = false
+  isRagQuery = false,
+  isImageGeneration = false
 }: HandleMessageProps) {
   const user = await requireAuth({ throwOnMissingProfile: true })
   
@@ -38,6 +40,17 @@ export async function handleMessage({
   })
 
   const insertedMessage = await insertMessage(messageData)
+
+  if (isImageGeneration) {
+    try {
+      await generateAndStoreImage(message, insertedMessage.message_id)
+      const updatedMessage = await refreshMessageWithFiles(insertedMessage.message_id)
+      return formatMessageResponse(updatedMessage)
+    } catch (error) {
+      console.error('Error generating image:', error)
+      throw error
+    }
+  }
 
   if (files?.length) {
     try {

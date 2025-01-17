@@ -15,7 +15,7 @@ import { useMessageSubmit } from "./use-message-submit"
 
 interface MessageInputProps {
   placeholder: string
-  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => Promise<void>
   isLoading?: boolean
 }
 
@@ -69,13 +69,15 @@ export function MessageInput({
     linkUrl,
     isLinkPopoverOpen,
     isRagMode,
+    isImageGenerationMode,
     handleChange,
     handlePaste,
     handleKeyDown,
     execCommand,
     setLinkUrl,
     setIsLinkPopoverOpen,
-    setIsRagMode
+    setIsRagMode,
+    setIsImageGenerationMode
   } = useMessageInput({ contentEditableRef })
 
   const {
@@ -89,6 +91,7 @@ export function MessageInput({
     html,
     uploadedFiles,
     isRagMode,
+    isImageGenerationMode,
     onSendMessage,
     setHtml: (html: string) => handleChange({ target: { value: html } } as ContentEditableEvent),
     setUploadedFiles: () => handleRemoveFile(-1) // Remove all files
@@ -100,6 +103,12 @@ export function MessageInput({
       setLinkUrl("")
       setIsLinkPopoverOpen(false)
     }
+  }
+
+  const getPlaceholder = () => {
+    if (isRagMode) return "Ask a question about your documents..."
+    if (isImageGenerationMode) return "Describe the image you want to generate..."
+    return placeholder
   }
 
   return (
@@ -132,7 +141,7 @@ export function MessageInput({
                   html={html}
                   onChange={handleChange}
                   onPaste={handlePaste}
-                  placeholder={isRagMode ? "Ask a question about your documents..." : placeholder}
+                  placeholder={getPlaceholder()}
                   tagName="div"
                   disabled={isLoading}
                 />
@@ -140,8 +149,15 @@ export function MessageInput({
             </div>
 
             <RagQueryButton
-              isActive={isRagMode}
-              onClick={() => setIsRagMode(!isRagMode)}
+              isActive={isRagMode || isImageGenerationMode}
+              onClick={() => {
+                setIsRagMode(!isRagMode)
+                if (isImageGenerationMode) setIsImageGenerationMode(false)
+              }}
+              onImageGenerate={() => {
+                setIsImageGenerationMode(!isImageGenerationMode)
+                if (isRagMode) setIsRagMode(false)
+              }}
               disabled={isUploading || isLoading}
             />
 

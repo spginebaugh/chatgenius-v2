@@ -14,7 +14,8 @@ interface UseMessageSubmitProps {
   html: string
   uploadedFiles: UiFileAttachment[]
   isRagMode: boolean
-  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => Promise<void>
+  isImageGenerationMode: boolean
+  onSendMessage: (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => Promise<void>
   setHtml: (html: string) => void
   setUploadedFiles: () => void
 }
@@ -27,6 +28,7 @@ export function useMessageSubmit({
   html,
   uploadedFiles,
   isRagMode,
+  isImageGenerationMode,
   onSendMessage,
   setHtml,
   setUploadedFiles
@@ -39,17 +41,17 @@ export function useMessageSubmit({
       
       if (markdown.trim() || uploadedFiles.length > 0) {
         try {
-          await onSendMessage(markdown, uploadedFiles, isRagMode)
+          await onSendMessage(markdown, uploadedFiles, isRagMode, isImageGenerationMode)
           setHtml("")
           setUploadedFiles()
-          // Don't reset RAG mode after sending - let user toggle it manually
+          // Don't reset modes after sending - let user toggle them manually
         } catch (error) {
           console.error("Error sending message:", error)
           toast.error("Failed to send message. Please try again.")
         }
       }
     }
-  }, [html, uploadedFiles, isRagMode, onSendMessage, setHtml, setUploadedFiles])
+  }, [html, uploadedFiles, isRagMode, isImageGenerationMode, onSendMessage, setHtml, setUploadedFiles])
 
   return {
     handleSubmit

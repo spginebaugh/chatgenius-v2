@@ -37,11 +37,11 @@ export function ChatLayout({
     setSelectedMessage(null)
   }
 
-  const handleMessageSend = (message: string, files?: UiFileAttachment[], isRagQuery?: boolean) => {
+  const handleMessageSend = (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => {
     if (selectedMessage) {
-      return handleMainMessage(message, initialView, files, isRagQuery, selectedMessage.message_id)
+      return handleMainMessage(message, initialView, files, isRagQuery, selectedMessage.message_id, isImageGeneration)
     }
-    return handleMainMessage(message, initialView, files, isRagQuery)
+    return handleMainMessage(message, initialView, files, isRagQuery, undefined, isImageGeneration)
   }
 
   return (

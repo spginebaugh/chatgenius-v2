@@ -9,6 +9,7 @@ export interface HandleMessageProps {
   receiverId?: string
   parentMessageId?: number
   isRagQuery?: boolean
+  isImageGeneration?: boolean
 }
 
 // Internal message data structure for server actions
