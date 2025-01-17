@@ -17,29 +17,26 @@ export async function handleRagQuery(params: {
   const userMessageData = createMessageData({
     message,
     userId,
-    channelId,
-    receiverId,
-    parentMessageId
+    channelId: channelId || null,
+    receiverId: receiverId || null,
+    parentMessageId: parentMessageId || null
   })
   const userMessage = await insertMessage(userMessageData)
 
   // Then handle RAG query
   const response = await queryDocuments(message, userId)
   
-  // Get parent message to determine message type
-  const parentMessage = parentMessageId ? await getMessage(parentMessageId) : null
-  
   // Create message with RAG response
   const responseMessageData = createMessageData({
     message: response.content,
     userId: RAG_BOT_USER_ID,
-    channelId,
-    receiverId,
-    parentMessageId
+    channelId: userMessage.channel_id,
+    receiverId: userMessage.message_type === 'direct' ? userMessage.user_id : null,
+    parentMessageId: userMessage.message_type === 'thread' ? userMessage.parent_message_id : 
+                    userMessage.message_type === 'direct' ? userMessage.message_id : 
+                    null,
+    messageType: userMessage.message_type
   })
-
-  // Use parent message type if available, otherwise use the same type as user message
-  responseMessageData.message_type = parentMessage?.message_type || userMessageData.message_type
 
   // Insert the response message
   return await insertMessage(responseMessageData)

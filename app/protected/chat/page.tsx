@@ -27,7 +27,7 @@ export default async function Page() {
   }
 
   // Fetch initial messages for the default channel
-  const initialMessages = await getChannelMessages(channels[0].id)
+  const initialMessages = await getChannelMessages(channels[0].channel_id)
 
   return (
     <ChatClient

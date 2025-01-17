@@ -8,7 +8,7 @@ function generateUsername(user: UserCreationData): string {
 
 function createUserData(user: UserCreationData): Omit<User, 'bio' | 'profile_picture_url' | 'last_active_at'> {
   return {
-    id: user.id,
+    user_id: user.id,
     username: generateUsername(user),
     status: 'OFFLINE' as const,
     inserted_at: new Date().toISOString()
@@ -20,7 +20,7 @@ async function handleUserCreation(user: UserCreationData): Promise<void> {
     // Try to get existing user
     await selectRecords<User>({
       table: 'users',
-      match: { id: user.id }
+      match: { user_id: user.id }
     })
     console.log('Existing user found:', user.id)
   } catch (error) {

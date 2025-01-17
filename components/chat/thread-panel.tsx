@@ -5,7 +5,7 @@ import { useThreadMessages } from "./thread/hooks"
 import { MessageInput } from "./message/message-input"
 import { MessageItem } from "./message/message-list/message-item"
 import type { ThreadPanelProps } from "./shared/types"
-import type { UiMessage } from "@/types/messages-ui"
+import type { UiMessage, UiFileAttachment } from "@/types/messages-ui"
 import { X } from "lucide-react"
 
 const ThreadMessage = memo(function ThreadMessage({ 
@@ -36,8 +36,8 @@ export const ThreadPanel = memo(function ThreadPanel({
 }: ThreadPanelProps) {
   const { messages: threadMessages, sendMessage } = useThreadMessages(selectedMessage)
 
-  const handleSendMessage = useCallback(async (message: string) => {
-    await sendMessage(message)
+  const handleSendMessage = useCallback(async (message: string, files?: UiFileAttachment[], isRagQuery?: boolean, isImageGeneration?: boolean) => {
+    await sendMessage(message, files, isRagQuery, isImageGeneration)
   }, [sendMessage])
 
   return (

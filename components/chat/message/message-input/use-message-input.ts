@@ -57,7 +57,8 @@ export function useMessageInput({ contentEditableRef }: UseMessageInputProps): U
       }
       // Enter without shift sends the message
       e.preventDefault()
-      // handleSubmit will be called by the form submit handler
+      const form = (e.target as HTMLElement).closest('form')
+      form?.requestSubmit()
     }
   }, [])
 

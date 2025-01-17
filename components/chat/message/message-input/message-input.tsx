@@ -1,7 +1,9 @@
 "use client"
 
 import React, { useRef } from "react"
-import ContentEditable, { ContentEditableEvent } from "react-contenteditable"
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Link from '@tiptap/extension-link'
 import { Button } from "@/components/ui/button"
 import { ArrowUp } from "lucide-react"
 import { THEME_COLORS, MESSAGE_INPUT_CONFIG } from "../../shared"
@@ -9,9 +11,38 @@ import type { UiFileAttachment } from "@/types/messages-ui"
 import { FormattingToolbar } from "./formatting-toolbar"
 import { FileUpload } from "./file-upload"
 import { RagQueryButton } from "../rag-query-button"
-import { useMessageInput } from "./use-message-input"
 import { useFileUpload } from "./use-file-upload"
-import { useMessageSubmit } from "./use-message-submit"
+import TurndownService from "turndown"
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced'
+})
+
+turndownService.addRule('strikethrough', {
+  filter: function (node) {
+    return (
+      node.nodeName === 'DEL' ||
+      node.nodeName === 'S' ||
+      node.nodeName === 'STRIKE'
+    )
+  },
+  replacement: function(content) {
+    return '~~' + content + '~~'
+  }
+})
+
+turndownService.addRule('italic', {
+  filter: function (node) {
+    return (
+      node.nodeName === 'I' ||
+      node.nodeName === 'EM'
+    )
+  },
+  replacement: function(content) {
+    return '*' + content + '*'
+  }
+})
 
 interface MessageInputProps {
   placeholder: string
@@ -29,7 +60,7 @@ function InputContainer({
 }) {
   return (
     <div 
-      className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus:outline-none focus:border-[${THEME_COLORS.primary}] focus:ring-1 focus:ring-[${THEME_COLORS.primary}] ${isLoading ? 'opacity-50' : ''}`}
+      className={`min-h-[${MESSAGE_INPUT_CONFIG.minHeight}] max-h-[${MESSAGE_INPUT_CONFIG.maxHeight}] overflow-y-auto w-full p-2 rounded-lg bg-white border border-gray-300 text-gray-700 focus-within:outline-none focus-within:border-[${THEME_COLORS.primary}] focus-within:ring-1 focus-within:ring-[${THEME_COLORS.primary}] ${isLoading ? 'opacity-50' : ''}`}
     >
       {children}
     </div>
@@ -60,25 +91,81 @@ export function MessageInput({
   onSendMessage, 
   isLoading = false 
 }: MessageInputProps) {
-  const contentEditableRef = useRef<any>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [lastShiftEnter, setLastShiftEnter] = React.useState<number>(0)
 
-  // Custom hooks for different functionalities
-  const {
-    html,
-    linkUrl,
-    isLinkPopoverOpen,
-    isRagMode,
-    isImageGenerationMode,
-    handleChange,
-    handlePaste,
-    handleKeyDown,
-    execCommand,
-    setLinkUrl,
-    setIsLinkPopoverOpen,
-    setIsRagMode,
-    setIsImageGenerationMode
-  } = useMessageInput({ contentEditableRef })
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        bulletList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+        orderedList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-blue-600 hover:underline',
+        },
+      }),
+    ],
+    content: '',
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none focus:outline-none',
+      },
+      handleKeyDown: (view, event) => {
+        if (!editor) return false
+
+        // Regular Enter always submits
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault()
+          handleNormalSubmit()
+          return true
+        }
+
+        // Handle Shift+Enter
+        if (event.key === 'Enter' && event.shiftKey) {
+          event.preventDefault()
+          const now = Date.now()
+          const timeSinceLastShiftEnter = now - lastShiftEnter
+          
+          // If in a list
+          if (editor.isActive('listItem')) {
+            // Double Shift+Enter within 500ms exits the list
+            if (timeSinceLastShiftEnter < 500) {
+              editor.chain()
+                .lift('listItem')
+                .run()
+              setLastShiftEnter(0)
+              return true
+            }
+            
+            // Single Shift+Enter adds list item
+            editor.chain()
+              .splitListItem('listItem')
+              .run()
+            setLastShiftEnter(now)
+            return true
+          }
+          
+          // Not in a list - insert line break
+          editor.chain()
+            .insertContent('<br>')
+            .run()
+          return true
+        }
+        
+        return false
+      },
+    },
+    onUpdate: ({ editor }) => {
+      // Handle content updates
+    },
+  })
 
   const {
     uploadedFiles,
@@ -87,93 +174,57 @@ export function MessageInput({
     handleRemoveFile
   } = useFileUpload()
 
-  const { handleSubmit } = useMessageSubmit({
-    html,
-    uploadedFiles,
-    isRagMode,
-    isImageGenerationMode,
-    onSendMessage,
-    setHtml: (html: string) => handleChange({ target: { value: html } } as ContentEditableEvent),
-    setUploadedFiles: () => handleRemoveFile(-1) // Remove all files
-  })
-
-  const insertLink = () => {
-    if (linkUrl) {
-      execCommand("createLink", linkUrl)
-      setLinkUrl("")
-      setIsLinkPopoverOpen(false)
+  const handleSubmitWithRag = () => {
+    if (editor?.getText().trim() || uploadedFiles.length > 0) {
+      const markdown = editor?.getHTML() ? turndownService.turndown(editor.getHTML()) : ""
+      onSendMessage(markdown, uploadedFiles, true, false)
+      editor?.commands.setContent("")
+      handleRemoveFile(-1)
     }
   }
 
-  const getPlaceholder = () => {
-    if (isRagMode) return "Ask a question about your documents..."
-    if (isImageGenerationMode) return "Describe the image you want to generate..."
-    return placeholder
+  const handleSubmitWithImageGen = () => {
+    if (editor?.getText().trim() || uploadedFiles.length > 0) {
+      const markdown = editor?.getHTML() ? turndownService.turndown(editor.getHTML()) : ""
+      onSendMessage(markdown, uploadedFiles, false, true)
+      editor?.commands.setContent("")
+      handleRemoveFile(-1)
+    }
+  }
+
+  const handleNormalSubmit = () => {
+    if (editor?.getText().trim() || uploadedFiles.length > 0) {
+      const markdown = editor?.getHTML() ? turndownService.turndown(editor.getHTML()) : ""
+      onSendMessage(markdown, uploadedFiles, false, false)
+      editor?.commands.setContent("")
+      handleRemoveFile(-1)
+    }
   }
 
   return (
-    <div className="p-4 border-t border-gray-200">
-      <form onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-2">
-          <FormattingToolbar
-            linkUrl={linkUrl}
-            setLinkUrl={setLinkUrl}
-            isLinkPopoverOpen={isLinkPopoverOpen}
-            setIsLinkPopoverOpen={setIsLinkPopoverOpen}
-            insertLink={insertLink}
-            isUploading={isUploading}
-            onFileInputClick={() => fileInputRef.current?.click()}
-          />
-          
+    <form onSubmit={(e) => { e.preventDefault(); handleNormalSubmit() }} className="flex gap-2">
+      <div className="flex-1">
+        <InputContainer isLoading={isLoading}>
+          <FormattingToolbar editor={editor} />
+          <div className="break-all break-words">
+            <EditorContent editor={editor} />
+          </div>
           <FileUpload
             uploadedFiles={uploadedFiles}
+            onFileUpload={handleFileUpload}
             onRemoveFile={handleRemoveFile}
+            isUploading={isUploading}
           />
-
-          <div className="flex items-end gap-2">
-            <div 
-              className="flex-1"
-              onKeyDown={handleKeyDown}
-            >
-              <InputContainer isLoading={isLoading}>
-                <ContentEditable
-                  innerRef={contentEditableRef}
-                  html={html}
-                  onChange={handleChange}
-                  onPaste={handlePaste}
-                  placeholder={getPlaceholder()}
-                  tagName="div"
-                  disabled={isLoading}
-                />
-              </InputContainer>
-            </div>
-
-            <RagQueryButton
-              isActive={isRagMode || isImageGenerationMode}
-              onClick={() => {
-                setIsRagMode(!isRagMode)
-                if (isImageGenerationMode) setIsImageGenerationMode(false)
-              }}
-              onImageGenerate={() => {
-                setIsImageGenerationMode(!isImageGenerationMode)
-                if (isRagMode) setIsRagMode(false)
-              }}
-              disabled={isUploading || isLoading}
-            />
-
-            <SendButton isDisabled={isUploading || isLoading} />
-          </div>
-        </div>
-      </form>
-
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        accept="*/*"
-        multiple
-        onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-      />
-    </div>
+        </InputContainer>
+      </div>
+      <div className="flex flex-col gap-2 justify-end">
+        <RagQueryButton
+          onSubmitWithRag={handleSubmitWithRag}
+          onSubmitWithImageGen={handleSubmitWithImageGen}
+          disabled={isUploading || isLoading || (!editor?.getText().trim() && !uploadedFiles.length)}
+        />
+        <SendButton isDisabled={isLoading || (!editor?.getText().trim() && !uploadedFiles.length)} />
+      </div>
+    </form>
   )
 }

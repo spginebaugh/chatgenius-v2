@@ -3,6 +3,7 @@
 import { createContext, useContext, ReactNode } from "react"
 import type { User } from "@/types/database"
 import { useChatUsers } from "../hooks/use-chat-users"
+import { usePresence } from "../hooks/use-presence"
 
 interface UsersContextValue {
   users: User[]
@@ -22,6 +23,9 @@ interface UsersProviderProps {
 export function UsersProvider({ children, initialUsers, initialCurrentUser }: UsersProviderProps) {
   // Setup user management
   const { users, currentUser, handleUserUpdate, handleLogout } = useChatUsers(initialUsers, initialCurrentUser)
+
+  // Setup presence management
+  usePresence(currentUser, handleUserUpdate)
 
   const value = {
     users,

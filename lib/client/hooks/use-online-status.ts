@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { UserStatus } from '@/types/database'
+import type { RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
+
+interface UserStatusPayload {
+  status: UserStatus
+}
 
 export function useOnlineStatus(userId: string) {
   const [status, setStatus] = useState<UserStatus>('OFFLINE')
@@ -11,6 +16,8 @@ export function useOnlineStatus(userId: string) {
   const supabase = createClient()
 
   useEffect(() => {
+    let isMounted = true
+
     async function fetchStatus() {
       try {
         setIsLoading(true)
@@ -21,16 +28,51 @@ export function useOnlineStatus(userId: string) {
           .single()
 
         if (error) throw error
-        setStatus(data?.status || 'OFFLINE')
+        if (isMounted) {
+          setStatus(data?.status || 'OFFLINE')
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch user status')
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch user status')
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
+    // Initial fetch
     fetchStatus()
-  }, [userId])
+
+    // Set up realtime subscription
+    const channel = supabase.channel('user_status_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload: RealtimePostgresUpdatePayload<UserStatusPayload>) => {
+          if (isMounted && payload.new && (
+            payload.new.status === 'ONLINE' || 
+            payload.new.status === 'OFFLINE' || 
+            payload.new.status === 'AWAY'
+          )) {
+            setStatus(payload.new.status)
+          }
+        }
+      )
+      .subscribe()
+
+    // Cleanup
+    return () => {
+      isMounted = false
+      channel.unsubscribe()
+    }
+  }, [userId, supabase])
 
   return {
     status,

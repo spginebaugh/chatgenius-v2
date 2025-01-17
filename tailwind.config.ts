@@ -72,9 +72,73 @@ const config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            maxWidth: 'none',
+            color: 'inherit',
+            a: {
+              color: 'inherit',
+              textDecoration: 'none',
+              fontWeight: '500',
+            },
+            '[class~="lead"]': {
+              color: 'inherit',
+            },
+            strong: {
+              color: 'inherit',
+            },
+            'ol[type="A"]': {
+              listStyleType: 'upper-alpha',
+            },
+            'ol[type="a"]': {
+              listStyleType: 'lower-alpha',
+            },
+            'ol[type="A" s]': {
+              listStyleType: 'upper-alpha',
+            },
+            'ol[type="a" s]': {
+              listStyleType: 'lower-alpha',
+            },
+            'ol[type="I"]': {
+              listStyleType: 'upper-roman',
+            },
+            'ol[type="i"]': {
+              listStyleType: 'lower-roman',
+            },
+            'ol[type="I" s]': {
+              listStyleType: 'upper-roman',
+            },
+            'ol[type="i" s]': {
+              listStyleType: 'lower-roman',
+            },
+            'ol[type="1"]': {
+              listStyleType: 'decimal',
+            },
+            'ul > li': {
+              paddingLeft: '1.5em',
+            },
+            'ul > li::before': {
+              width: '0.5em',
+              height: '0.5em',
+              top: 'calc(0.875em - 0.1875em)',
+              left: '0.25em',
+            },
+            'ol > li': {
+              paddingLeft: '1.5em',
+            },
+            'ol > li::before': {
+              left: '0',
+            },
+          },
+        },
+      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/typography"),
+  ],
 } satisfies Config;
 
 export default config;

@@ -23,6 +23,7 @@ export function useMessageHandling() {
       })
     } catch (error) {
       console.error('Failed to send message:', error)
+      throw error // Re-throw the error so it can be handled by the caller
     }
   }
 

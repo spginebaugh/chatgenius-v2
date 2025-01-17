@@ -8,7 +8,8 @@ import type {
   UpdateRecordProps, 
   DeleteRecordProps, 
   SelectRecordsProps,
-  QueryResult 
+  QueryResult,
+  SupabaseClient
 } from './types'
 
 /**
@@ -49,7 +50,7 @@ export async function insertRecord<T extends DbRecord>({
   options = {}
 }: InsertRecordProps<T>): Promise<T> {
   return executeQuery<T>({
-    query: async (supabase) => {
+    query: async (supabase: SupabaseClient) => {
       const result = await supabase
         .from(table)
         .insert(data)
@@ -73,7 +74,7 @@ export async function updateRecord<T extends DbRecord>({
   options = {}
 }: UpdateRecordProps<T>): Promise<T> {
   return executeQuery<T>({
-    query: async (supabase) => {
+    query: async (supabase: SupabaseClient) => {
       let query = supabase
         .from(table)
         .update(data)
@@ -96,7 +97,7 @@ export async function deleteRecord<T extends DbRecord>({
   options = {}
 }: DeleteRecordProps<T>): Promise<void> {
   await executeQuery<null>({
-    query: async (supabase) => {
+    query: async (supabase: SupabaseClient) => {
       let query = supabase
         .from(table)
         .delete()
@@ -118,7 +119,7 @@ export async function selectRecords<T extends DbRecord>({
   options = {}
 }: SelectRecordsProps<T>): Promise<T[]> {
   return executeQuery<T[]>({
-    query: async (supabase) => {
+    query: async (supabase: SupabaseClient) => {
       let query = supabase
         .from(table)
         .select(select)

@@ -6,6 +6,7 @@ import {
   DropdownMenuContent, 
   DropdownMenuItem 
 } from "@/components/ui/dropdown-menu"
+import { useUsers } from "../../providers/users-provider"
 
 interface HeaderProps {
   currentUser: User
@@ -35,11 +36,14 @@ function UserIcon() {
 
 function StatusDot({ status }: { status: User['status'] }) {
   return (
-    <span className={`w-1.5 h-1.5 rounded-full ${status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-500'}`} />
+    <span className={`w-1.5 h-1.5 rounded-full ${status === 'ONLINE' ? 'bg-green-500' : 'bg-red-500'}`} />
   )
 }
 
-export function Header({ currentUser, currentView, onProfileClick, onLogout }: HeaderProps) {
+export function Header({ currentView, onProfileClick, onLogout }: HeaderProps) {
+  // Get current user from context to ensure we have the latest status
+  const { currentUser } = useUsers()
+
   return (
     <div className="h-14 bg-[#333F48] flex items-center justify-between px-4 flex-shrink-0">
       <div className="text-white font-semibold">

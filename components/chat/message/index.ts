@@ -1,2 +1,2 @@
-export * from "./message-input"
+export { MessageInput } from "./message-input"
 export * from "./message-list" 

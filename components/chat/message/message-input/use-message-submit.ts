@@ -10,6 +10,31 @@ const turndownService = new TurndownService({
   codeBlockStyle: 'fenced'
 })
 
+turndownService.addRule('strikethrough', {
+  filter: function (node) {
+    return (
+      node.nodeName === 'DEL' ||
+      node.nodeName === 'S' ||
+      node.nodeName === 'STRIKE'
+    )
+  },
+  replacement: function(content) {
+    return '~~' + content + '~~'
+  }
+})
+
+turndownService.addRule('italic', {
+  filter: function (node) {
+    return (
+      node.nodeName === 'I' ||
+      node.nodeName === 'EM'
+    )
+  },
+  replacement: function(content) {
+    return '*' + content + '*'
+  }
+})
+
 interface UseMessageSubmitProps {
   html: string
   uploadedFiles: UiFileAttachment[]

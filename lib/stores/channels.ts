@@ -3,16 +3,14 @@
 import { createStore } from './config'
 import { Channel } from '@/types/database'
 
-type SetState<T> = (
-  partial: T | Partial<T> | ((state: T) => T | Partial<T>),
-  replace?: boolean
-) => void
-
 interface ChannelsState {
   channels: Record<number, Channel>
   activeChannelId: number | null
   isLoading: boolean
   error: string | null
+}
+
+interface ChannelsActions {
   setChannels: (channels: Channel[]) => void
   setActiveChannel: (channelId: number | null) => void
   addChannel: (channel: Channel) => void
@@ -23,29 +21,29 @@ interface ChannelsState {
   reset: () => void
 }
 
-const initialState = {
-  channels: {} as Record<number, Channel>,
-  activeChannelId: null as number | null,
+type ChannelsStore = ChannelsState & ChannelsActions
+
+const initialState: ChannelsState = {
+  channels: {},
+  activeChannelId: null,
   isLoading: false,
-  error: null as string | null,
+  error: null,
 }
 
-export const useChannelsStore = createStore<ChannelsState>((set: SetState<ChannelsState>) => ({
-  ...initialState,
-
+const createActions = (set: (fn: (state: ChannelsState) => Partial<ChannelsState>) => void): ChannelsActions => ({
   setChannels: (channels: Channel[]) => 
-    set((state: ChannelsState) => ({
+    set((state) => ({
       channels: channels.reduce((acc: Record<number, Channel>, channel: Channel) => {
         acc[channel.channel_id] = channel
         return acc
-      }, {} as Record<number, Channel>)
+      }, {})
     })),
 
   setActiveChannel: (channelId: number | null) => 
-    set({ activeChannelId: channelId }),
+    set(() => ({ activeChannelId: channelId })),
 
   addChannel: (channel: Channel) => 
-    set((state: ChannelsState) => ({
+    set((state) => ({
       channels: {
         ...state.channels,
         [channel.channel_id]: channel
@@ -53,7 +51,7 @@ export const useChannelsStore = createStore<ChannelsState>((set: SetState<Channe
     })),
 
   updateChannel: (channelId: number, updates: Partial<Channel>) => 
-    set((state: ChannelsState) => ({
+    set((state) => ({
       channels: {
         ...state.channels,
         [channelId]: {
@@ -64,12 +62,17 @@ export const useChannelsStore = createStore<ChannelsState>((set: SetState<Channe
     })),
 
   removeChannel: (channelId: number) => 
-    set((state: ChannelsState) => {
+    set((state) => {
       const { [channelId]: _, ...rest } = state.channels
       return { channels: rest }
     }),
 
-  setError: (error: string | null) => set({ error }),
-  setLoading: (isLoading: boolean) => set({ isLoading }),
-  reset: () => set(initialState)
-}), 'channels-store', true) 
+  setError: (error: string | null) => set(() => ({ error })),
+  setLoading: (isLoading: boolean) => set(() => ({ isLoading })),
+  reset: () => set(() => initialState)
+})
+
+export const useChannelsStore = createStore<ChannelsStore>({
+  ...initialState,
+  ...createActions((fn) => useChannelsStore.setState(fn))
+}, 'channels-store', true) 

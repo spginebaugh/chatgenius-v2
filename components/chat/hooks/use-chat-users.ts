@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User } from "@/types/database"
+import type { RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
 
 export function useChatUsers(initialUsers: User[], initialCurrentUser: User) {
   const [users, setUsers] = useState<User[]>(initialUsers)
@@ -8,6 +9,7 @@ export function useChatUsers(initialUsers: User[], initialCurrentUser: User) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
+  const isMounted = useRef(true)
 
   useEffect(() => {
     let mounted = true
@@ -34,9 +36,31 @@ export function useChatUsers(initialUsers: User[], initialCurrentUser: User) {
       }
     }
 
+    // Set up realtime subscription for user updates
+    const channel = supabase.channel('user_updates')
+      .on('postgres_changes' as const, {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users'
+      }, async (payload: RealtimePostgresUpdatePayload<User>) => {
+        if (!mounted || !payload.new) return
+
+        // Update the user in our local state
+        if (payload.new.user_id === currentUser.user_id) {
+          setCurrentUser(payload.new)
+        }
+        setUsers(prev => prev.map(user => 
+          user.user_id === payload.new.user_id ? payload.new : user
+        ))
+      })
+      .subscribe()
+
     fetchUsers()
-    return () => { mounted = false }
-  }, [supabase]) // Only re-run if supabase client changes
+    return () => { 
+      mounted = false
+      channel.unsubscribe()
+    }
+  }, [supabase, currentUser.user_id])
 
   const handleUserUpdate = useCallback((updatedUser: User) => {
     if (updatedUser.user_id === currentUser.user_id) {
